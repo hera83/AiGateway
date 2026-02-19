@@ -24,9 +24,10 @@ ARG APP_GID=1000
 ARG APP_USER=appuser
 ARG APP_GROUP=appuser
 
-# Install su-exec for dropping privileges and curl for healthchecks
+# Install gosu for dropping privileges and curl for healthchecks
+# gosu is more reliable than su in Docker environments
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    su-exec \
+    gosu \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -59,7 +60,7 @@ ENV ASPNETCORE_URLS=http://+:8080 \
 
 EXPOSE 8080
 
-# Health check using curl (installed above)
+# Health check using curl
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 

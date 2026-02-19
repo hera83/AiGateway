@@ -32,9 +32,9 @@ if [ "$(id -u)" -eq 0 ]; then
     echo "Permissions fixed:"
     ls -la / | grep -E "data|logs"
     
-    # Drop to non-root user and run application
-    echo "Dropping to non-root user: $APP_USER"
-    exec su-exec "$APP_UID:$APP_GID" dotnet AiGateway.dll
+    # Drop to non-root user and run application using gosu
+    echo "Dropping to non-root user: $APP_USER ($APP_UID:$APP_GID)"
+    exec gosu "$APP_UID:$APP_GID" dotnet AiGateway.dll
 else
     # Already running as non-root user
     CURRENT_UID=$(id -u)

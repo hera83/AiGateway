@@ -54,8 +54,6 @@ A production-ready .NET 10 Web API gateway with transparent request forwarding, 
    sed -i "s/AIGATEWAY_GID=1000/AIGATEWAY_GID=$(id -g)/" .env
    ```
    
-   Or manually edit `.env` and set `AIGATEWAY_UID` and `AIGATEWAY_GID` to your user ID.
-   
    On Windows (cmd):
    ```batch
    REM Windows users can usually leave defaults (1000) unless you get permission errors
@@ -70,7 +68,20 @@ A production-ready .NET 10 Web API gateway with transparent request forwarding, 
    ```bash
    docker compose logs -f aigateway
    ```
-
+   
+   You should see:
+   ```
+   AiGateway Entrypoint ===
+   Running as: uid=0(root) gid=0(root) groups=0(root)
+   Running as root - fixing permissions...
+   Dropping to non-root user: appuser (1000:1000)
+   ```
+   
+   After ~40 seconds, health check should turn green:
+   ```
+   docker compose ps
+   # STATUS should be "Up X seconds (healthy)"
+   ```
 ### Access the Gateway
 
 - **Swagger UI:** http://localhost:8080/swagger
@@ -169,6 +180,34 @@ The application will start on https://localhost:5001 and http://localhost:5000.
 - **OllamaService**: Typed service for Ollama API calls with streaming support
 - **Endpoints**: Minimal API endpoints for key management and request proxying
 - **Middleware**: Error handling and global exception catching
+
+### Docker Architecture & Permission Handling
+
+The Docker setup uses a robust privilege-dropping mechanism:
+
+1. **Build Phase** (Dockerfile):
+   - Multi-stage build: SDK → Runtime (Debian-based aspnet:10.0)
+   - Creates non-root user `appuser` with configurable UID/GID
+   - Installs `gosu` for safe privilege dropping (more reliable than `su`)
+   - Installs `curl` for healthcheck endpoint
+
+2. **Entrypoint Script** (`entrypoint.sh`):
+   - Always starts as `root` (required to fix volume permissions)
+   - Ensures `/data` and `/logs` directories are writable by app user
+   - Uses `gosu` to safely drop to app user before starting .NET app
+   - Logs warnings if permissions are incorrect for debugging
+
+3. **Runtime** (docker-compose.yml):
+   - Passes UID/GID from `.env` to Dockerfile as build args
+   - Sets container `user:` to match host user UID/GID
+   - Mounts volumes: `./data:/data` and `./logs:/logs`
+   - Healthcheck: `curl -f http://localhost:8080/health`
+
+This design ensures:
+- ✅ No `chmod 777` or security compromises needed
+- ✅ Container runs non-root even after privilege drop
+- ✅ Host volumes accessible regardless of ownership
+- ✅ SQLite database readable/writable by both host and container
 
 ### Upstream Services
 
