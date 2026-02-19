@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  aigateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aigateway
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      # Gateway Configuration
+      - Gateway__MasterKey=12345678-1234-1234-1234-123456789012
+      - Gateway__DatabasePath=/app/data/apikeys.sqlite
+      - Gateway__LogPath=/app/logs/log-.txt
+      - Gateway__LogRetentionDays=31
+      # Upstream Services - Tilpas til dine behov
+      - Upstreams__SpeachesBaseUrl=http://10.64.10.4:8000
+      - Upstreams__OllamaBaseUrl=http://10.64.10.5:11434
+      # Ollama Configuration
+      - Ollama__DefaultModel=llama3.2
+      - Ollama__RequestTimeoutSeconds=120
+    volumes:
+      # Persistent storage for database
+      - aigateway-data:/app/data
+      # Persistent storage for logs
+      - aigateway-logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - aigateway-network
+
+volumes:
+  aigateway-data:
+    driver: local
+  aigateway-logs:
+    driver: local
+
+networks:
+  aigateway-network:
+    driver: bridge
