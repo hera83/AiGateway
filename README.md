@@ -15,180 +15,37 @@ A production-ready .NET 10 Web API gateway with transparent request forwarding, 
 - **Comprehensive Logging**: Serilog with console and daily rolling file logs
 - **Error Handling**: Consistent ErrorDto responses across all endpoints
 - **EF Core Integration**: Automatic database initialization and schema management
-- **🐳 Docker Support**: Multi-stage build with proper permission handling for persistent volumes
 
-## Quick Start with Docker
+## Docker (Recommended)
 
-### Prerequisites
-- Docker & Docker Compose installed
-- Access to Ollama and Speaches services
+### Quick Start
 
-### Setup (Quick)
+```bash
+mkdir -p data logs
+cp .env.example .env
 
-1. **Clone repository:**
-   ```bash
-   git clone https://github.com/hera83/AiGateway.git
-   cd AiGateway
-   ```
+docker compose up -d --build
+```
 
-2. **Create required directories (container will own them):**
-   ```bash
-   mkdir -p data logs
-   ```
-   
-   ⚠️ **Important**: Host directories must exist! Container will automatically fix permissions on start.
+- API: `http://localhost:8080`
+- Swagger: `http://localhost:8080/swagger`
+- Health: `http://localhost:8080/health`
 
-3. **Create environment file:**
-   ```bash
-   cp .env.example .env
-   ```
+### Permission Handling (Automatic)
 
-4. **Update upstream service URLs (if needed):**
-   
-   Edit `.env` and set:
-   ```env
-   AIGATEWAY_MASTER_KEY=your-guid-here
-   SPEACHES_BASE_URL=http://10.64.10.4:8000
-   OLLAMA_BASE_URL=http://10.64.10.5:11434
-   AIGATEWAY_UID=1000
-   AIGATEWAY_GID=1000
-   ```
+The container starts as `root`, fixes ownership on `/data` and `/logs`, and then drops to the non-root app user using `gosu`. This prevents SQLite Error 14 without manual `chown`.
 
-5. **Start the gateway:**
-   ```bash
-   docker compose up -d --build
-   ```
-
-6. **Verify it's running:**
-   ```bash
-   docker compose logs -f aigateway
-   ```
-   
-   You should see:
-   ```
-   === AiGateway Entrypoint ===
-   Running as: uid=0(root) gid=0(root)
-   Created directories: /data /logs
-   Checking volume permissions...
-   ✓ /data is writable
-   ✓ /logs is writable
-   Starting application as: appuser (1000:1000)
-   ```
-   
-   After ~40 seconds, health check should turn green:
-   ```
-   docker compose ps
-   # STATUS should be "Up X seconds (healthy)"
-   ```
-
-### ✅ Automatic Permission Handling
-
-The container handles all permission issues automatically:
-
-- **Container starts as root** (not restricted to non-root user)
-- **Entrypoint script checks** if `/data` and `/logs` are writable
-- **If not writable**: Automatically runs `chown -R $APP_UID:$APP_GID /data /logs`
-- **Then drops to appuser** via `gosu` before starting the .NET app
-- **Result**: SQLite can always create/open database without manual `chmod 777`
-
-**No manual `chown` needed!** Just ensure host directories exist:
+**Requirement:** host folders must exist before starting:
 ```bash
 mkdir -p data logs
 ```
 
-### Docker Build Notes
+### Environment Variables (.env)
 
-- **Idempotent user/group creation**: Dockerfile checks if UID/GID already exists before creating (handles base image conflicts)
-- **Privilege dropping**: Uses `gosu` for safe non-root execution
-- **Permission handling**: Entrypoint script automatically fixes volume ownership
-- **No root required**: After initialization, app runs as non-root user
-
-### Access the Gateway
-
-- **Swagger UI:** http://localhost:8080/swagger
-- **API Base:** http://localhost:8080
-- **Health Check:** http://localhost:8080/health
-
-### Persistent Data
-
-- **SQLite Database:** `./data/apikeys.sqlite` (mounted from `/data` in container)
-- **Logs:** `./logs/` (mounted from `/logs` in container)
-
-Both directories are created automatically and persist between restarts.
-
-### Common Docker Commands
-
-```bash
-# View logs
-docker compose logs -f aigateway
-
-# Stop the gateway
-docker compose down
-
-# Restart the gateway
-docker compose restart
-
-# Stop and remove all data volumes
-docker compose down -v
-
-# Rebuild image after code changes
-docker compose up -d --build
-
-# Run a command in the container
-docker compose exec aigateway dotnet --version
-
-# Check permissions inside container
-docker compose exec aigateway id
-docker compose exec aigateway ls -la /data
-```
-
-## Configuration
-
-### Environment Variables (Docker)
-
-Set these in `.env` when using Docker Compose:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `AIGATEWAY_MASTER_KEY` | Required | GUID for internal security |
-| `AIGATEWAY_UID` | 1000 | Container user ID (for volume permissions) |
-| `AIGATEWAY_GID` | 1000 | Container group ID (for volume permissions) |
-| `SPEACHES_BASE_URL` | http://10.64.10.4:8000 | Speaches service URL |
-| `OLLAMA_BASE_URL` | http://10.64.10.5:11434 | Ollama service URL |
-| `OLLAMA_DEFAULT_MODEL` | llama3.2 | Default Ollama model |
-| `OLLAMA_TIMEOUT` | 120 | Request timeout in seconds |
-
-### Configuration Files
-
-- **appsettings.json** - Default configuration (overridable by env vars)
-- **appsettings.Development.json** - Development-specific settings
-- **.env.example** - Example environment variables for Docker
-
-## Local Development (without Docker)
-
-### Prerequisites
-
-- .NET 10 SDK
-- Visual Studio Code or similar editor
-
-### Installation & Setup
-
-1. **Navigate to project**:
-   ```bash
-   cd AiGateway
-   ```
-
-2. **Restore dependencies**:
-   ```bash
-   dotnet restore
-   ```
-
-3. **Run the application**:
-   ```bash
-   dotnet run
-   ```
-
-The application will start on https://localhost:5001 and http://localhost:5000.
+- `AIGATEWAY_MASTER_KEY` (required)
+- `AIGATEWAY_UID` / `AIGATEWAY_GID` (optional, default 1000)
+- `SPEACHES_BASE_URL`
+- `OLLAMA_BASE_URL`
 
 ## Architecture
 

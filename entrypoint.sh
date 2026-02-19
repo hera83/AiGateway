@@ -15,31 +15,21 @@ echo "App UID:GID: $APP_UID:$APP_GID ($APP_USER:$APP_GROUP)"
 
 # Ensure data and logs directories exist
 mkdir -p /data /logs
-echo "Created directories: /data /logs"
 
-# Check and fix permissions on volumes
-echo "Checking volume permissions..."
-if [ ! -w /data ]; then
-    echo "WARNING: /data is not writable, fixing permissions..."
-    echo "Before: $(ls -ld /data)"
+echo "Permissions before fix:"
+ls -ld /data /logs || true
+
+# If running as root, or /data is not writable, fix ownership
+if [ "$(id -u)" -eq 0 ] || [ ! -w /data ]; then
+    echo "Fixing ownership for /data and /logs..."
     chown -R "$APP_UID:$APP_GID" /data /logs || true
-    chmod -R 755 /data /logs
-    echo "After:  $(ls -ld /data)"
-else
-    echo "✓ /data is writable"
 fi
 
-if [ ! -w /logs ]; then
-    echo "WARNING: /logs is not writable, fixing permissions..."
-    chown -R "$APP_UID:$APP_GID" /logs || true
-    chmod -R 755 /logs
-else
-    echo "✓ /logs is writable"
-fi
+# Ensure app user can read/write
+chmod -R u+rwX /data /logs
 
-# Optional: Set umask for new files (group writable)
-# umask 002
+echo "Permissions after fix:"
+ls -ld /data /logs || true
 
-# Drop to non-root user and run application
-echo "Starting application as: $APP_USER ($APP_UID:$APP_GID)"
+# Start app as non-root user
 exec gosu "$APP_UID:$APP_GID" dotnet AiGateway.dll
