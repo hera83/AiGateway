@@ -68,3 +68,9 @@ Thumbs.db
 # Test results
 TestResults/
 **/*.trx
+
+# Include Docker-related files in build context
+!Dockerfile
+!docker-compose.yml
+!entrypoint.sh
+!.dockerignore

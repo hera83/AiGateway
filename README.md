@@ -15,7 +15,7 @@ A production-ready .NET 10 Web API gateway with transparent request forwarding, 
 - **Comprehensive Logging**: Serilog with console and daily rolling file logs
 - **Error Handling**: Consistent ErrorDto responses across all endpoints
 - **EF Core Integration**: Automatic database initialization and schema management
-- **🐳 Docker Support**: Multi-stage build with persistent volumes for data and logs
+- **🐳 Docker Support**: Multi-stage build with proper permission handling for persistent volumes
 
 ## Quick Start with Docker
 
@@ -23,7 +23,7 @@ A production-ready .NET 10 Web API gateway with transparent request forwarding, 
 - Docker & Docker Compose installed
 - Access to Ollama and Speaches services
 
-### Setup
+### Setup (Quick)
 
 1. **Clone repository:**
    ```bash
@@ -31,26 +31,44 @@ A production-ready .NET 10 Web API gateway with transparent request forwarding, 
    cd AiGateway
    ```
 
-2. **Create environment file:**
+2. **Create required directories:**
+   ```bash
+   mkdir -p data logs
+   ```
+
+3. **Create environment file:**
    ```bash
    cp .env.example .env
    ```
+
+4. **Set correct UID/GID (recommended):**
    
-   Edit `.env` with your configuration:
-   ```env
-   AIGATEWAY_MASTER_KEY=your-unique-guid-here
-   SPEACHES_BASE_URL=http://10.64.10.4:8000
-   OLLAMA_BASE_URL=http://10.64.10.5:11434
+   On Linux/MacOS/WSL2:
+   ```bash
+   # Get your user ID and group ID
+   id -u   # Your UID
+   id -g   # Your GID
+   
+   # Update .env with your values
+   sed -i "s/AIGATEWAY_UID=1000/AIGATEWAY_UID=$(id -u)/" .env
+   sed -i "s/AIGATEWAY_GID=1000/AIGATEWAY_GID=$(id -g)/" .env
+   ```
+   
+   Or manually edit `.env` and set `AIGATEWAY_UID` and `AIGATEWAY_GID` to your user ID.
+   
+   On Windows (cmd):
+   ```batch
+   REM Windows users can usually leave defaults (1000) unless you get permission errors
    ```
 
-3. **Start the gateway:**
+5. **Start the gateway:**
    ```bash
    docker compose up -d --build
    ```
 
-4. **Verify it's running:**
+6. **Verify it's running:**
    ```bash
-   docker compose logs -f
+   docker compose logs -f aigateway
    ```
 
 ### Access the Gateway
@@ -64,7 +82,7 @@ A production-ready .NET 10 Web API gateway with transparent request forwarding, 
 - **SQLite Database:** `./data/apikeys.sqlite` (mounted from `/data` in container)
 - **Logs:** `./logs/` (mounted from `/logs` in container)
 
-Both directories persist between restarts and are automatically created.
+Both directories are created automatically and persist between restarts.
 
 ### Common Docker Commands
 
@@ -83,7 +101,36 @@ docker compose down -v
 
 # Rebuild image after code changes
 docker compose up -d --build
+
+# Run a command in the container
+docker compose exec aigateway dotnet --version
+
+# Check permissions inside container
+docker compose exec aigateway id
+docker compose exec aigateway ls -la /data
 ```
+
+## Configuration
+
+### Environment Variables (Docker)
+
+Set these in `.env` when using Docker Compose:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AIGATEWAY_MASTER_KEY` | Required | GUID for internal security |
+| `AIGATEWAY_UID` | 1000 | Container user ID (for volume permissions) |
+| `AIGATEWAY_GID` | 1000 | Container group ID (for volume permissions) |
+| `SPEACHES_BASE_URL` | http://10.64.10.4:8000 | Speaches service URL |
+| `OLLAMA_BASE_URL` | http://10.64.10.5:11434 | Ollama service URL |
+| `OLLAMA_DEFAULT_MODEL` | llama3.2 | Default Ollama model |
+| `OLLAMA_TIMEOUT` | 120 | Request timeout in seconds |
+
+### Configuration Files
+
+- **appsettings.json** - Default configuration (overridable by env vars)
+- **appsettings.Development.json** - Development-specific settings
+- **.env.example** - Example environment variables for Docker
 
 ## Local Development (without Docker)
 
@@ -110,26 +157,6 @@ docker compose up -d --build
    ```
 
 The application will start on https://localhost:5001 and http://localhost:5000.
-
-## Configuration
-
-### Environment Variables (Docker)
-
-Set these in `.env` when using Docker Compose:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `AIGATEWAY_MASTER_KEY` | Required | GUID for internal security |
-| `SPEACHES_BASE_URL` | http://10.64.10.4:8000 | Speaches service URL |
-| `OLLAMA_BASE_URL` | http://10.64.10.5:11434 | Ollama service URL |
-| `OLLAMA_DEFAULT_MODEL` | llama3.2 | Default Ollama model |
-| `OLLAMA_TIMEOUT` | 120 | Request timeout in seconds |
-
-### Configuration Files
-
-- **appsettings.json** - Default configuration (overridable by env vars)
-- **appsettings.Development.json** - Development-specific settings
-- **.env.example** - Example environment variables for Docker
 
 ## Architecture
 
@@ -172,30 +199,101 @@ Set these in `.env` when using Docker Compose:
 
 ## Troubleshooting
 
-### Docker container won't start
-```bash
-# Check logs for errors
-docker compose logs aigateway
+### SQLite Error 14: 'unable to open database file'
 
-# Check if container is running
-docker compose ps
-```
+This happens when the container user cannot write to `/data` volume.
 
-### Database issues
+**Solution:**
+
+1. **Check permissions on host:**
+   ```bash
+   ls -la data/
+   ls -la logs/
+   ```
+
+2. **Check permissions inside container:**
+   ```bash
+   docker compose exec aigateway id
+   docker compose exec aigateway ls -la /data
+   docker compose exec aigateway ls -la /logs
+   ```
+
+3. **Fix permissions - choose one:**
+
+   **Option A: Set UID/GID in .env (recommended)**
+   ```bash
+   # Get your UID and GID
+   YOUR_UID=$(id -u)
+   YOUR_GID=$(id -g)
+   
+   # Update .env
+   sed -i "s/AIGATEWAY_UID=1000/AIGATEWAY_UID=$YOUR_UID/" .env
+   sed -i "s/AIGATEWAY_GID=1000/AIGATEWAY_GID=$YOUR_GID/" .env
+   
+   # Rebuild and restart
+   docker compose down -v
+   docker compose up -d --build
+   ```
+
+   **Option B: Fix permissions on host (if UID/GID mismatch)**
+   ```bash
+   # Recursively fix permissions for existing data
+   sudo chown -R 1000:1000 data/ logs/
+   sudo chmod -R 755 data/ logs/
+   ```
+
+   **Option C: Re-initialize (nuclear option)**
+   ```bash
+   # Remove everything and start fresh
+   docker compose down -v
+   rm -rf data logs
+   mkdir -p data logs
+   docker compose up -d --build
+   ```
+
+### Container exits or logs show permission denied
+
 ```bash
-# Reset database and volumes
-docker compose down -v
+# 1. Check what UID/GID the container is trying to use
+docker compose exec aigateway id
+
+# 2. Compare with host directories
+ls -la data/ logs/
+
+# 3. If mismatch, update .env with correct AIGATEWAY_UID/AIGATEWAY_GID
+# and rebuild the container
+docker compose down
 docker compose up -d --build
 ```
 
-### Connection to upstream services fails
-- Verify Ollama and Speaches are running and accessible
-- Check IP addresses in `.env` are correct
-- Ensure network connectivity from Docker container
+### Health check fails
 
-### HTTPS issues in container
-HTTPS redirection is disabled in Docker by default (set in docker-compose.yml). 
-For local development, HTTPS redirect is enabled by default.
+```bash
+# Check if /health endpoint responds
+curl -v http://localhost:8080/health
+
+# Check container logs
+docker compose logs -f aigateway | grep -i health
+
+# Verify application started
+docker compose logs aigateway | head -50
+```
+
+### Database connection string errors
+
+Ensure:
+- `./data` directory exists on host: `mkdir -p data`
+- SQLite database path is `/data/apikeys.sqlite`
+- Container user can write to `/data` (see UID/GID section above)
+
+### Docker Compose build fails
+
+```bash
+# Clean rebuild
+docker compose down
+docker system prune -f
+docker compose up -d --build
+```
 
 ## Project Structure
 
@@ -214,7 +312,9 @@ AiGateway/
 Docker/
 ├── Dockerfile                 # Multi-stage Docker build
 ├── docker-compose.yml         # Docker Compose configuration
-└── .dockerignore             # Docker ignore patterns
+├── entrypoint.sh             # Permission handling script
+├── .dockerignore             # Docker ignore patterns
+└── .env.example              # Example environment variables
 ```
 
 ## License

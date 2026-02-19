@@ -5,9 +5,20 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        APP_UID: ${AIGATEWAY_UID:-1000}
+        APP_GID: ${AIGATEWAY_GID:-1000}
+        APP_USER: appuser
+        APP_GROUP: appuser
+    
     container_name: aigateway
+    
+    # Run container with specific UID/GID to match host user for volume access
+    user: "${AIGATEWAY_UID:-1000}:${AIGATEWAY_GID:-1000}"
+    
     ports:
       - "8080:8080"
+    
     environment:
       # ASP.NET Core
       DOTNET_ENVIRONMENT: Production
@@ -30,9 +41,14 @@ services:
       # Ollama Configuration
       Ollama__DefaultModel: ${OLLAMA_DEFAULT_MODEL:-llama3.2}
       Ollama__RequestTimeoutSeconds: ${OLLAMA_TIMEOUT:-120}
+      
+      # Pass UID/GID to container for entrypoint script
+      APP_UID: ${AIGATEWAY_UID:-1000}
+      APP_GID: ${AIGATEWAY_GID:-1000}
     
     volumes:
       # Persistent storage for SQLite database
+      # Ensure ./data exists on host with correct permissions
       - ./data:/data
       # Persistent storage for logs
       - ./logs:/logs
@@ -40,7 +56,7 @@ services:
     restart: unless-stopped
     
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -48,6 +64,10 @@ services:
     
     networks:
       - aigateway-network
+    
+    # Important: container may initially run as root to fix permissions,
+    # then drops to specified UID/GID. If you see permission issues,
+    # ensure ./data and ./logs directories exist and are readable by your host user.
 
 networks:
   aigateway-network:
