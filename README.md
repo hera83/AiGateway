@@ -71,7 +71,7 @@ A production-ready .NET 10 Web API gateway with transparent request forwarding, 
    
    You should see:
    ```
-   AiGateway Entrypoint ===
+   === AiGateway Entrypoint ===
    Running as: uid=0(root) gid=0(root) groups=0(root)
    Running as root - fixing permissions...
    Dropping to non-root user: appuser (1000:1000)
@@ -82,6 +82,14 @@ A production-ready .NET 10 Web API gateway with transparent request forwarding, 
    docker compose ps
    # STATUS should be "Up X seconds (healthy)"
    ```
+
+### Docker Build Notes
+
+- **Idempotent user/group creation**: Dockerfile checks if UID/GID already exists before creating (handles base image conflicts)
+- **Privilege dropping**: Uses `gosu` for safe non-root execution
+- **Permission handling**: Entrypoint script automatically fixes volume ownership
+- **No root required**: After initialization, app runs as non-root user
+
 ### Access the Gateway
 
 - **Swagger UI:** http://localhost:8080/swagger

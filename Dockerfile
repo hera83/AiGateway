@@ -33,9 +33,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Create non-root user with configurable UID/GID
-RUN groupadd -r -g "$APP_GID" "$APP_GROUP" && \
-    useradd -r -u "$APP_UID" -g "$APP_GROUP" "$APP_USER"
+# Create non-root user/group idempotently
+# Check if group exists before creating, reuse if found
+RUN if ! getent group "$APP_GID" > /dev/null 2>&1; then \
+        groupadd -r -g "$APP_GID" "$APP_GROUP"; \
+    else \
+        echo "Group GID $APP_GID already exists"; \
+    fi
+
+# Check if user exists before creating, reuse if found
+RUN if ! getent passwd "$APP_UID" > /dev/null 2>&1; then \
+        useradd -r -u "$APP_UID" -g "$APP_GID" "$APP_USER"; \
+    else \
+        echo "User UID $APP_UID already exists"; \
+    fi
 
 # Create directories for data and logs (will be overridden by volume mounts)
 RUN mkdir -p /data /logs && \
