@@ -1,49 +1,30 @@
-# .NET
+# Build
 bin/
 obj/
-out/
-*.dll
-*.exe
-*.pdb
-.vs/
-.vscode/
+
+# User-specific files
 *.user
 *.suo
-*.userprefs
-*.sln.iml
-publish/
+*.userosscache
+*.sln.docstates
 
-# Database
-*.sqlite
-*.sqlite3
-data/
+# VS Code
+.vscode/
+.vs/
+
+# Rider
+.idea/
 
 # Logs
 logs/
-
-# Environment
-.env
-.env.local
-appsettings.local.json
 
 # OS
 .DS_Store
 Thumbs.db
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# Publish
+*.publishsettings
+*.pubxml
 
-# Node (if needed for frontend tools)
-node_modules/
-npm-debug.log
-
-# NuGet
-.nuget/
-
-# Coverage
-coverage/
-*.opencover.xml
+# Test results
+TestResults/
