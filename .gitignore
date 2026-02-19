@@ -31,3 +31,9 @@ TestResults/
 
 # Dokumenter
 Docs/
+
+# Data (but keep docker volumes)
+data/
+!docker-compose.yml
+!Dockerfile
+!.gitignore
