@@ -32,8 +32,12 @@ TestResults/
 # Dokumenter
 Docs/
 
-# Data (but keep docker volumes)
+# Environment variables (but keep example)
+.env
+!.env.example
+
+# Docker data volumes (but keep docker files)
 data/
-!docker-compose.yml
 !Dockerfile
-!.gitignore
+!docker-compose.yml
+!docker-compose.override.yml

@@ -32,6 +32,7 @@ try
     var databasePath = config["Gateway:DatabasePath"] ?? throw new InvalidOperationException("DatabasePath not configured");
     var speachesBaseUrl = config["Upstreams:SpeachesBaseUrl"] ?? throw new InvalidOperationException("SpeachesBaseUrl not configured");
     var ollamaBaseUrl = config["Upstreams:OllamaBaseUrl"] ?? throw new InvalidOperationException("OllamaBaseUrl not configured");
+    var enableHttpsRedirection = config.GetValue<bool>("Gateway:EnableHttpsRedirection", true);
 
     // Ensure database directory exists
     var dbDir = Path.GetDirectoryName(databasePath);
@@ -152,7 +153,13 @@ try
 
     // Use middleware
     app.UseErrorHandling();
-    app.UseHttpsRedirection();
+    
+    // Only enable HTTPS redirection when configured (disabled in container by default)
+    if (enableHttpsRedirection)
+    {
+        app.UseHttpsRedirection();
+    }
+    
     app.UseRouting();
     app.UseAuthentication();
     app.UseAuthorization();

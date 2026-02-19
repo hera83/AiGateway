@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  aigateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aigateway
+    ports:
+      - "8080:8080"
+    environment:
+      # ASP.NET Core
+      DOTNET_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      
+      # Gateway Configuration
+      Gateway__MasterKey: ${AIGATEWAY_MASTER_KEY}
+      Gateway__DatabasePath: /data/apikeys.sqlite
+      Gateway__LogPath: /logs/log-.txt
+      Gateway__LogRetentionDays: 31
+      Gateway__EnableHttpsRedirection: "false"
+      
+      # Serilog Configuration
+      Serilog__WriteTo__1__Args__path: /logs/log-.txt
+      
+      # Upstream Services
+      Upstreams__SpeachesBaseUrl: ${SPEACHES_BASE_URL}
+      Upstreams__OllamaBaseUrl: ${OLLAMA_BASE_URL}
+      
+      # Ollama Configuration
+      Ollama__DefaultModel: ${OLLAMA_DEFAULT_MODEL:-llama3.2}
+      Ollama__RequestTimeoutSeconds: ${OLLAMA_TIMEOUT:-120}
+    
+    volumes:
+      # Persistent storage for SQLite database
+      - ./data:/data
+      # Persistent storage for logs
+      - ./logs:/logs
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    networks:
+      - aigateway-network
+
+networks:
+  aigateway-network:
+    driver: bridge

@@ -49,12 +49,22 @@ bld/
 *.sqlite-shm
 *.sqlite-wal
 
-# Documentation
-README.md
+# Documentation (keep README.md for context)
 *.md
+!README.md
 Docs/
 
-# Docker
-Dockerfile
-docker-compose.yml
-.dockerignore
+# Environment
+.env
+!.env.example
+
+# CI/CD
+.github/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test results
+TestResults/
+**/*.trx

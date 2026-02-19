@@ -1,0 +1,25 @@
+# docker-compose.override.yml
+# This file is automatically loaded by docker compose for local development
+# Copy this to docker-compose.override.yml to customize your local environment
+
+version: '3.8'
+
+services:
+  aigateway:
+    environment:
+      # Override to Development environment for verbose logging
+      DOTNET_ENVIRONMENT: Development
+      
+      # Enable HTTPS redirect for local dev if needed
+      # Gateway__EnableHttpsRedirection: "true"
+      
+      # Override Serilog minimum level for more detailed logs
+      Serilog__MinimumLevel__Default: Debug
+    
+    # Expose additional ports if needed for debugging
+    # ports:
+    #   - "5000:8080"
+    
+    # Mount local code for hot reload (requires dotnet watch)
+    # volumes:
+    #   - ./AiGateway:/src/AiGateway:ro
