@@ -11,44 +11,35 @@ APP_GROUP=${APP_GROUP:-appuser}
 
 echo "=== AiGateway Entrypoint ==="
 echo "Running as: $(id)"
-echo "App user: $APP_USER (UID: $APP_UID, GID: $APP_GID)"
+echo "App UID:GID: $APP_UID:$APP_GID ($APP_USER:$APP_GROUP)"
 
-# If running as root, fix permissions and drop to app user
-if [ "$(id -u)" -eq 0 ]; then
-    echo "Running as root - fixing permissions..."
-    
-    # Ensure data and logs directories exist
-    mkdir -p /data /logs
-    
-    # Fix ownership and permissions for volumes
-    # If volumes are already mounted from host, this ensures container user can access them
-    chown -R "$APP_UID:$APP_GID" /data /logs
+# Ensure data and logs directories exist
+mkdir -p /data /logs
+echo "Created directories: /data /logs"
+
+# Check and fix permissions on volumes
+echo "Checking volume permissions..."
+if [ ! -w /data ]; then
+    echo "WARNING: /data is not writable, fixing permissions..."
+    echo "Before: $(ls -ld /data)"
+    chown -R "$APP_UID:$APP_GID" /data /logs || true
     chmod -R 755 /data /logs
-    
-    # Fix app directory permissions
-    chown -R "$APP_UID:$APP_GID" /app
-    chmod -R 755 /app
-    
-    echo "Permissions fixed:"
-    ls -la / | grep -E "data|logs"
-    
-    # Drop to non-root user and run application using gosu
-    echo "Dropping to non-root user: $APP_USER ($APP_UID:$APP_GID)"
-    exec gosu "$APP_UID:$APP_GID" dotnet AiGateway.dll
+    echo "After:  $(ls -ld /data)"
 else
-    # Already running as non-root user
-    CURRENT_UID=$(id -u)
-    CURRENT_GID=$(id -g)
-    echo "Already running as non-root ($CURRENT_UID:$CURRENT_GID)"
-    
-    # Check if /data and /logs are writable
-    if [ ! -w /data ]; then
-        echo "WARNING: /data is not writable by current user!"
-        echo "Current permissions:"
-        ls -la / | grep -E "data|logs"
-        echo "You may need to adjust AIGATEWAY_UID/AIGATEWAY_GID in .env"
-    fi
-    
-    # Run application directly
-    exec dotnet AiGateway.dll
+    echo "✓ /data is writable"
 fi
+
+if [ ! -w /logs ]; then
+    echo "WARNING: /logs is not writable, fixing permissions..."
+    chown -R "$APP_UID:$APP_GID" /logs || true
+    chmod -R 755 /logs
+else
+    echo "✓ /logs is writable"
+fi
+
+# Optional: Set umask for new files (group writable)
+# umask 002
+
+# Drop to non-root user and run application
+echo "Starting application as: $APP_USER ($APP_UID:$APP_GID)"
+exec gosu "$APP_UID:$APP_GID" dotnet AiGateway.dll

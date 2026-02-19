@@ -13,8 +13,9 @@ services:
     
     container_name: aigateway
     
-    # Run container with specific UID/GID to match host user for volume access
-    user: "${AIGATEWAY_UID:-1000}:${AIGATEWAY_GID:-1000}"
+    # NOTE: Container starts as root to fix volume permissions,
+    # then entrypoint.sh drops to appuser (UID/GID) via gosu.
+    # Do NOT set user: here - let entrypoint handle it.
     
     ports:
       - "8080:8080"
@@ -42,13 +43,13 @@ services:
       Ollama__DefaultModel: ${OLLAMA_DEFAULT_MODEL:-llama3.2}
       Ollama__RequestTimeoutSeconds: ${OLLAMA_TIMEOUT:-120}
       
-      # Pass UID/GID to container for entrypoint script
+      # Pass UID/GID to entrypoint script
       APP_UID: ${AIGATEWAY_UID:-1000}
       APP_GID: ${AIGATEWAY_GID:-1000}
     
     volumes:
       # Persistent storage for SQLite database
-      # Ensure ./data exists on host with correct permissions
+      # Entrypoint script automatically fixes permissions
       - ./data:/data
       # Persistent storage for logs
       - ./logs:/logs
@@ -64,10 +65,6 @@ services:
     
     networks:
       - aigateway-network
-    
-    # Important: container may initially run as root to fix permissions,
-    # then drops to specified UID/GID. If you see permission issues,
-    # ensure ./data and ./logs directories exist and are readable by your host user.
 
 networks:
   aigateway-network:

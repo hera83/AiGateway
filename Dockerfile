@@ -25,7 +25,6 @@ ARG APP_USER=appuser
 ARG APP_GROUP=appuser
 
 # Install gosu for dropping privileges and curl for healthchecks
-# gosu is more reliable than su in Docker environments
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gosu \
     curl \
@@ -50,8 +49,7 @@ RUN if ! getent passwd "$APP_UID" > /dev/null 2>&1; then \
 
 # Create directories for data and logs (will be overridden by volume mounts)
 RUN mkdir -p /data /logs && \
-    chown -R "$APP_UID:$APP_GID" /data /logs /app && \
-    chmod -R 755 /data /logs
+    chmod 755 /data /logs
 
 # Copy published app
 COPY --from=publish /app/publish .
@@ -74,6 +72,9 @@ EXPOSE 8080
 # Health check using curl
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
+
+# Run as root so entrypoint script can fix permissions before dropping to appuser
+USER root
 
 # Use entrypoint script to handle permissions and start app
 ENTRYPOINT ["/app/entrypoint.sh"]

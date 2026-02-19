@@ -31,32 +31,27 @@ A production-ready .NET 10 Web API gateway with transparent request forwarding, 
    cd AiGateway
    ```
 
-2. **Create required directories:**
+2. **Create required directories (container will own them):**
    ```bash
    mkdir -p data logs
    ```
+   
+   ⚠️ **Important**: Host directories must exist! Container will automatically fix permissions on start.
 
 3. **Create environment file:**
    ```bash
    cp .env.example .env
    ```
 
-4. **Set correct UID/GID (recommended):**
+4. **Update upstream service URLs (if needed):**
    
-   On Linux/MacOS/WSL2:
-   ```bash
-   # Get your user ID and group ID
-   id -u   # Your UID
-   id -g   # Your GID
-   
-   # Update .env with your values
-   sed -i "s/AIGATEWAY_UID=1000/AIGATEWAY_UID=$(id -u)/" .env
-   sed -i "s/AIGATEWAY_GID=1000/AIGATEWAY_GID=$(id -g)/" .env
-   ```
-   
-   On Windows (cmd):
-   ```batch
-   REM Windows users can usually leave defaults (1000) unless you get permission errors
+   Edit `.env` and set:
+   ```env
+   AIGATEWAY_MASTER_KEY=your-guid-here
+   SPEACHES_BASE_URL=http://10.64.10.4:8000
+   OLLAMA_BASE_URL=http://10.64.10.5:11434
+   AIGATEWAY_UID=1000
+   AIGATEWAY_GID=1000
    ```
 
 5. **Start the gateway:**
@@ -72,9 +67,12 @@ A production-ready .NET 10 Web API gateway with transparent request forwarding, 
    You should see:
    ```
    === AiGateway Entrypoint ===
-   Running as: uid=0(root) gid=0(root) groups=0(root)
-   Running as root - fixing permissions...
-   Dropping to non-root user: appuser (1000:1000)
+   Running as: uid=0(root) gid=0(root)
+   Created directories: /data /logs
+   Checking volume permissions...
+   ✓ /data is writable
+   ✓ /logs is writable
+   Starting application as: appuser (1000:1000)
    ```
    
    After ~40 seconds, health check should turn green:
@@ -82,6 +80,21 @@ A production-ready .NET 10 Web API gateway with transparent request forwarding, 
    docker compose ps
    # STATUS should be "Up X seconds (healthy)"
    ```
+
+### ✅ Automatic Permission Handling
+
+The container handles all permission issues automatically:
+
+- **Container starts as root** (not restricted to non-root user)
+- **Entrypoint script checks** if `/data` and `/logs` are writable
+- **If not writable**: Automatically runs `chown -R $APP_UID:$APP_GID /data /logs`
+- **Then drops to appuser** via `gosu` before starting the .NET app
+- **Result**: SQLite can always create/open database without manual `chmod 777`
+
+**No manual `chown` needed!** Just ensure host directories exist:
+```bash
+mkdir -p data logs
+```
 
 ### Docker Build Notes
 
