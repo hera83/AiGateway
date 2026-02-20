@@ -20,6 +20,18 @@ public static class UpstreamForwarder
         "Upgrade"
     };
 
+    private static readonly HashSet<string> SensitiveHeaders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "x-api-key",
+        "authorization",
+        "cookie",
+        "set-cookie",
+        "x-forwarded-for",
+        "x-forwarded-proto",
+        "x-forwarded-host",
+        "forwarded"
+    };
+
     private static readonly HashSet<string> DiagnosticHeaders = new(StringComparer.OrdinalIgnoreCase)
     {
         "Server",
@@ -42,6 +54,10 @@ public static class UpstreamForwarder
         context.Items["proxy_service"] = areaName;
         context.Items["proxy_action"] = actionName;
 
+        // Read config for header stripping
+        var config = context.RequestServices.GetRequiredService<IConfiguration>();
+        var stripSensitiveHeaders = config.GetValue<bool>("Proxy:StripSensitiveHeaders", true);
+
         try
         {
             var client = httpClientFactory.CreateClient(clientName);
@@ -57,31 +73,60 @@ public static class UpstreamForwarder
                 upstreamRequest.Content = new StreamContent(context.Request.Body);
             }
 
+            var forwardedHeaders = new List<string>();
+            var droppedHeaders = new List<string>();
+
             foreach (var header in context.Request.Headers)
             {
-                if (HopByHopHeaders.Contains(header.Key))
+                var headerName = header.Key;
+
+                // Check if header should be dropped
+                if (HopByHopHeaders.Contains(headerName))
                 {
+                    droppedHeaders.Add($"{headerName}(hop-by-hop)");
                     continue;
                 }
 
-                if (header.Key.Equals("x-api-key", StringComparison.OrdinalIgnoreCase))
+                if (stripSensitiveHeaders && SensitiveHeaders.Contains(headerName))
                 {
+                    droppedHeaders.Add($"{headerName}(sensitive)");
                     continue;
                 }
 
-                if (header.Key.Equals("Host", StringComparison.OrdinalIgnoreCase))
+                if (headerName.Equals("Host", StringComparison.OrdinalIgnoreCase))
                 {
+                    droppedHeaders.Add($"{headerName}(host)");
                     continue;
                 }
 
-                if (upstreamRequest.Content != null && header.Key.StartsWith("Content-", StringComparison.OrdinalIgnoreCase))
+                if (headerName.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
                 {
-                    upstreamRequest.Content.Headers.TryAddWithoutValidation(header.Key, header.Value.ToArray());
+                    droppedHeaders.Add($"{headerName}(content-length)");
+                    continue;
+                }
+
+                // Forward the header
+                if (upstreamRequest.Content != null && headerName.StartsWith("Content-", StringComparison.OrdinalIgnoreCase))
+                {
+                    upstreamRequest.Content.Headers.TryAddWithoutValidation(headerName, header.Value.ToArray());
+                    forwardedHeaders.Add(headerName);
                 }
                 else
                 {
-                    upstreamRequest.Headers.TryAddWithoutValidation(header.Key, header.Value.ToArray());
+                    upstreamRequest.Headers.TryAddWithoutValidation(headerName, header.Value.ToArray());
+                    forwardedHeaders.Add(headerName);
                 }
+            }
+
+            // Debug logging (header names only, no values)
+            if (forwardedHeaders.Count > 0 || droppedHeaders.Count > 0)
+            {
+                Log.Debug(
+                    "Upstream {Service} {Action}: forwarded={ForwardedHeaders}, dropped={DroppedHeaders}",
+                    areaName,
+                    actionName,
+                    string.Join(", ", forwardedHeaders),
+                    string.Join(", ", droppedHeaders));
             }
 
             using var upstreamResponse = await client.SendAsync(

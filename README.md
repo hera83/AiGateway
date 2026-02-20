@@ -47,10 +47,22 @@ mkdir -p data logs
 - `SPEACHES_BASE_URL`
 - `OLLAMA_BASE_URL`
 - `Gateway__ForceHttp11ForOllama` (optional: true/false)
+- `Proxy__StripSensitiveHeaders` (optional: true/false, default true)
+
+### Header Filtering
+
+The gateway **automatically strips sensitive headers** before forwarding to upstream services to prevent auth leakage:
+
+**Blocked Headers:**
+- Authentication: `x-api-key`, `authorization`, `cookie`, `set-cookie`
+- Proxying metadata: `x-forwarded-for`, `x-forwarded-proto`, `x-forwarded-host`, `forwarded`
+- Infrastructure: `host`, `content-length`, hop-by-hop headers
+
+**Debugging:** Set `Proxy__StripSensitiveHeaders=false` to disable filtering (development only).
 
 ### Diagnostics
 
-- `GET /diag/upstreams` (master key only)
+- `GET /diag/ollama` (master key only)
   - Tests Ollama `/api/version`
   - Tests Ollama `/api/generate` (stream=false)
   - Returns status + response snippet
