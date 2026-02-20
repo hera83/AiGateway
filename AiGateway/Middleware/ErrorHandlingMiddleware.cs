@@ -28,7 +28,14 @@ public class ErrorHandlingMiddleware
 
     private static Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
-        Log.Error(exception, "Unhandled exception: {Message}", exception.Message);
+        Log.Error(exception, "Unhandled exception in {Path}: {Message}", context.Request.Path, exception.Message);
+
+        // If response has already started, we cannot modify it
+        if (context.Response.HasStarted)
+        {
+            Log.Warning("Response already started, cannot send error response");
+            return Task.CompletedTask;
+        }
 
         return ErrorResponseWriter.WriteAsync(
             context,

@@ -96,6 +96,9 @@ try
             displayName: "API Key",
             configureOptions: _ => { });
 
+    // Add custom authorization failure handler
+    // builder.Services.AddCustomAuthorizationHandler();  // Disabled for now - using middleware logging instead
+
     // Add authorization policies
     builder.Services.AddAuthorization(options =>
     {

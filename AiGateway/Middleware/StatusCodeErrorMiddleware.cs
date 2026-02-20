@@ -1,3 +1,5 @@
+using Serilog;
+
 namespace AiGateway.Middleware;
 
 /// <summary>
@@ -16,40 +18,77 @@ public class StatusCodeErrorMiddleware
     {
         await _next(context);
 
+        // Never write if response has already started
         if (context.Response.HasStarted)
         {
             return;
         }
 
+        // Skip if response already has content
         if (context.Response.ContentLength.HasValue && context.Response.ContentLength.Value > 0)
         {
             return;
         }
 
+        // Skip if content type is already set
         if (!string.IsNullOrEmpty(context.Response.ContentType))
         {
             return;
         }
 
         var statusCode = context.Response.StatusCode;
+        
+        // Map status codes to ErrorDto responses
         if (statusCode == StatusCodes.Status400BadRequest)
         {
+            Log.Warning("Returning 400 Bad Request for {Path}", context.Request.Path);
             await ErrorResponseWriter.WriteAsync(context, statusCode, "BAD_REQUEST", "Bad Request");
         }
         else if (statusCode == StatusCodes.Status401Unauthorized)
         {
-            await ErrorResponseWriter.WriteAsync(context, statusCode, "UNAUTHORIZED", "Unauthorized");
+            Log.Warning("Returning 401 Unauthorized for {Path} - missing or invalid API key", context.Request.Path);
+            await ErrorResponseWriter.WriteAsync(context, statusCode, "UNAUTHORIZED", "Missing or invalid API key");
         }
         else if (statusCode == StatusCodes.Status403Forbidden)
         {
-            await ErrorResponseWriter.WriteAsync(context, statusCode, "FORBIDDEN", "Forbidden");
+            // Determine detailed reason for 403
+            var reason = "Access denied";
+            var isMaster = context.User.FindFirst("is_master")?.Value == "true";
+            var keyId = context.User.FindFirst("key_id")?.Value;
+            var appName = context.User.FindFirst("app_name")?.Value ?? "unknown";
+            
+            if (isMaster && context.Request.Path.StartsWithSegments("/v1/ollama", StringComparison.OrdinalIgnoreCase))
+            {
+                reason = "Master keys cannot access Ollama endpoints (client key required)";
+            }
+            else if (isMaster && context.Request.Path.StartsWithSegments("/v1/speaches", StringComparison.OrdinalIgnoreCase))
+            {
+                reason = "Master keys cannot access Speaches endpoints (client key required)";
+            }
+            else if (!isMaster && context.Request.Path.StartsWithSegments("/v1/keys", StringComparison.OrdinalIgnoreCase))
+            {
+                reason = "Client keys cannot manage API keys (master key required)";
+            }
+            
+            Log.Warning(
+                "Returning 403 Forbidden for {Method} {Path}: {Reason} (IsMaster={IsMaster}, KeyId={KeyId}, App={AppName})",
+                context.Request.Method,
+                context.Request.Path,
+                reason,
+                isMaster,
+                keyId ?? "N/A",
+                appName);
+            
+            await ErrorResponseWriter.WriteAsync(context, statusCode, "FORBIDDEN", reason);
         }
         else if (statusCode == StatusCodes.Status404NotFound)
         {
+            Log.Warning("Returning 404 Not Found for {Path}", context.Request.Path);
             await ErrorResponseWriter.WriteAsync(context, statusCode, "NOT_FOUND", "Not Found");
         }
         else if (statusCode == StatusCodes.Status502BadGateway)
         {
+            Log.Error("Returning 502 Bad Gateway for {Path}", context.Request.Path);
             await ErrorResponseWriter.WriteAsync(context, statusCode, "BAD_GATEWAY", "Bad Gateway");
         }
     }

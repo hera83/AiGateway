@@ -24,11 +24,23 @@ public static class ErrorResponseWriter
         return Results.Json(dto, statusCode: statusCode);
     }
 
-    public static Task WriteAsync(HttpContext context, int statusCode, string code, string message, object? details = null)
+    public static async Task WriteAsync(HttpContext context, int statusCode, string code, string message, object? details = null)
     {
+        // CRITICAL: Never write if response has already started (prevents Content-Length mismatch)
+        if (context.Response.HasStarted)
+        {
+            return;
+        }
+
         var dto = Create(context, code, message, details);
+        
+        // Clear any existing response state
+        context.Response.Clear();
+        
+        // Set status code and content type BEFORE writing body
         context.Response.StatusCode = statusCode;
         context.Response.ContentType = "application/json";
-        return context.Response.WriteAsJsonAsync(dto);
+        
+        await context.Response.WriteAsJsonAsync(dto);
     }
 }
