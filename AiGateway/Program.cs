@@ -221,8 +221,13 @@ try
     app.MapSpeachesEndpoints();
     app.MapOllamaEndpoints();
 
-    // Diagnostic endpoint for upstreams (MasterOnly)
-    app.MapGet("/diag/upstreams", async (IHttpClientFactory httpClientFactory, IConfiguration configuration, HttpContext httpContext) =>
+    // Diagnostic endpoints group (MasterOnly)
+    var diagGroup = app.MapGroup("/diag")
+        .WithTags("Diagnostics")
+        .RequireAuthorization("MasterOnly");
+
+    // Test Ollama connectivity
+    diagGroup.MapGet("/ollama", async (IHttpClientFactory httpClientFactory, IConfiguration configuration, HttpContext httpContext) =>
         {
             var client = httpClientFactory.CreateClient("ollama");
             var model = configuration["Ollama:DefaultModel"] ?? "llama3.2";
@@ -233,7 +238,6 @@ try
                 {
                     return value;
                 }
-
                 return value.Substring(0, max);
             }
 
@@ -260,22 +264,29 @@ try
 
             return Results.Ok(new { version, generate });
         })
-        .RequireAuthorization("MasterOnly")
-        .WithTags("Diagnostics")
-        .WithSummary("Test upstream connectivity")
+        .WithSummary("Test Ollama upstream")
         .WithDescription("Tests Ollama /api/version and /api/generate from inside the running container.");
 
     // Redirect root to Swagger UI for convenience
     app.MapGet("/", () => Results.Redirect("/swagger"))
         .ExcludeFromDescription();
 
-    // Health check endpoint
+    // Health check endpoint (public, no auth)
     app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
         .Produces(StatusCodes.Status200OK)
         .WithName("Health")
-        .WithTags("System");
+        .WithTags("System")
+        .ExcludeFromDescription();
 
-    Log.Information("AiGateway starting on {Urls}", string.Join(", ", app.Urls));
+    // Log startup summary
+    Log.Information("===== AiGateway Startup Summary =====");
+    Log.Information("Environment: {Environment}", builder.Environment.EnvironmentName);
+    Log.Information("Database: {DbPath}", databasePath);
+    Log.Information("Upstreams: Ollama={Ollama}, Speaches={Speaches}", ollamaBaseUrl, speachesBaseUrl);
+    Log.Information("Auth Policies: Master can access /v1/keys + /diag; Client can access /v1/ollama + /v1/speaches");
+    Log.Information("Listening on: {Urls}", string.Join(", ", app.Urls));
+    Log.Information("=====================================");
+
     app.Run();
 }
 catch (Exception ex)

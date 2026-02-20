@@ -12,7 +12,7 @@ public static class OllamaEndpoints
     {
         var group = app.MapGroup("/v1/ollama")
             .WithTags("Ollama")
-            .RequireAuthorization("Authenticated");
+            .RequireAuthorization("ClientOnly");
 
         group.MapPost("/api/generate", Generate)
             .WithSummary("Generate completion")
@@ -47,7 +47,6 @@ public static class OllamaEndpoints
         group.MapPost("/api/pull", PullModel)
             .WithSummary("Pull model")
             .WithDescription("Pulls a model from a registry by forwarding to Ollama /api/pull.")
-            .RequireAuthorization("MasterOnly")
             .Accepts<OllamaPullRequestDto>("application/json")
             .Produces<OllamaPullResponseDto>(StatusCodes.Status200OK)
             .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
@@ -58,7 +57,6 @@ public static class OllamaEndpoints
         group.MapPost("/api/push", PushModel)
             .WithSummary("Push model")
             .WithDescription("Pushes a model to a registry by forwarding to Ollama /api/push.")
-            .RequireAuthorization("MasterOnly")
             .Accepts<OllamaPushRequestDto>("application/json")
             .Produces<OllamaPushResponseDto>(StatusCodes.Status200OK)
             .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
@@ -69,7 +67,6 @@ public static class OllamaEndpoints
         group.MapPost("/api/create", CreateModel)
             .WithSummary("Create model")
             .WithDescription("Creates a model by forwarding to Ollama /api/create.")
-            .RequireAuthorization("MasterOnly")
             .Accepts<OllamaCreateRequestDto>("application/json")
             .Produces<OllamaCreateResponseDto>(StatusCodes.Status200OK)
             .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
@@ -80,7 +77,6 @@ public static class OllamaEndpoints
         group.MapPost("/api/copy", CopyModel)
             .WithSummary("Copy model")
             .WithDescription("Copies a model by forwarding to Ollama /api/copy.")
-            .RequireAuthorization("MasterOnly")
             .Accepts<OllamaCopyRequestDto>("application/json")
             .Produces<OllamaCopyResponseDto>(StatusCodes.Status200OK)
             .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
@@ -91,7 +87,6 @@ public static class OllamaEndpoints
         group.MapDelete("/api/delete", DeleteModel)
             .WithSummary("Delete model")
             .WithDescription("Deletes a model by forwarding to Ollama /api/delete.")
-            .RequireAuthorization("MasterOnly")
             .Accepts<OllamaDeleteRequestDto>("application/json")
             .Produces<OllamaDeleteResponseDto>(StatusCodes.Status200OK)
             .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
@@ -132,14 +127,6 @@ public static class OllamaEndpoints
             .WithDescription("Gets Ollama version information by forwarding to Ollama /api/version.")
             .Produces<OllamaVersionResponseDto>(StatusCodes.Status200OK)
             .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
-            .Produces<ErrorDto>(StatusCodes.Status401Unauthorized)
-            .Produces<ErrorDto>(StatusCodes.Status403Forbidden)
-            .Produces<ErrorDto>(StatusCodes.Status502BadGateway);
-
-        group.MapGet("/self-check", SelfCheck)
-            .WithSummary("Self-check Ollama upstream")
-            .WithDescription("Tests Ollama /api/version and /api/generate and returns status summary.")
-            .Produces(StatusCodes.Status200OK)
             .Produces<ErrorDto>(StatusCodes.Status401Unauthorized)
             .Produces<ErrorDto>(StatusCodes.Status403Forbidden)
             .Produces<ErrorDto>(StatusCodes.Status502BadGateway);

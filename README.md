@@ -75,194 +75,84 @@ rm -rf data/
 docker compose up -d --build
 ```
 
-## Architecture
+---
 
-### Components
+## Security Model
 
-- **ApiKeyAuthenticationHandler**: Custom authentication handler validating x-api-key header
-- **ApiKeyDbContext**: Entity Framework Core context for API key storage
-- **ClientKeyService**: Business logic for key management (CRUD, validation)
-- **HashingService**: SHA256 hashing with per-key random 16-byte salt
-- **OllamaService**: Typed service for Ollama API calls with streaming support
-- **Endpoints**: Minimal API endpoints for key management and request proxying
-- **Middleware**: Error handling and global exception catching
+### Authorization Policies
 
-### Docker Architecture & Permission Handling
+- **Master Key**: Can access `/v1/keys` (key management) and `/diag/*` (diagnostics)
+  - **Cannot** access `/v1/ollama/*` or `/v1/speaches/*`
+- **Client Key**: Can access `/v1/ollama/*` and `/v1/speaches/*` (AI services)
+  - **Cannot** access `/v1/keys` or `/diag/*`
+- **Public** (no auth needed): `/health`, `/swagger`
 
-The Docker setup uses a robust privilege-dropping mechanism:
-
-1. **Build Phase** (Dockerfile):
-   - Multi-stage build: SDK → Runtime (Debian-based aspnet:10.0)
-   - Creates non-root user `appuser` with configurable UID/GID
-   - Installs `gosu` for safe privilege dropping (more reliable than `su`)
-   - Installs `curl` for healthcheck endpoint
-
-2. **Entrypoint Script** (`entrypoint.sh`):
-   - Always starts as `root` (required to fix volume permissions)
-   - Ensures `/data` and `/logs` directories are writable by app user
-   - Uses `gosu` to safely drop to app user before starting .NET app
-   - Logs warnings if permissions are incorrect for debugging
-
-3. **Runtime** (docker-compose.yml):
-   - Passes UID/GID from `.env` to Dockerfile as build args
-   - Sets container `user:` to match host user UID/GID
-   - Mounts volumes: `./data:/data` and `./logs:/logs`
-   - Healthcheck: `curl -f http://localhost:8080/health`
-
-This design ensures:
-- ✅ No `chmod 777` or security compromises needed
-- ✅ Container runs non-root even after privilege drop
-- ✅ Host volumes accessible regardless of ownership
-- ✅ SQLite database readable/writable by both host and container
-
-### Upstream Services
-
-- **Speaches**: `http://10.64.10.4:8000`
-- **Ollama**: `http://10.64.10.5:11434`
-
-## API Endpoints
-
-### Key Management
-- `POST /api/keys/create` - Create new API key (master key required)
-- `GET /api/keys` - List API keys (master key required)
-- `DELETE /api/keys/{id}` - Delete API key (master key required)
-
-### Ollama (Forwarded)
-- `POST /api/ollama/generate` - Text generation
-- `POST /api/ollama/chat` - Chat completion
-- `POST /api/ollama/embed` - Generate embeddings
-- `GET /api/ollama/models` - List models
-- `POST /api/ollama/pull` - Download model (master key only)
-- `POST /api/ollama/delete` - Delete model (master key only)
-- `GET /api/ollama/self-check` - Self-check Ollama upstream
-
-### Speaches (Forwarded)
-- `POST /api/speaches/**` - All Speaches requests forwarded
-
-### System
-- `GET /health` - Health check
-- `GET /swagger` - Swagger UI
-
-## Troubleshooting
-
-### SQLite Error 14: 'unable to open database file'
-
-This happens when the container user cannot write to `/data` volume.
-
-**Solution:**
-
-1. **Check permissions on host:**
-   ```bash
-   ls -la data/
-   ls -la logs/
-   ```
-
-2. **Check permissions inside container:**
-   ```bash
-   docker compose exec aigateway id
-   docker compose exec aigateway ls -la /data
-   docker compose exec aigateway ls -la /logs
-   ```
-
-3. **Fix permissions - choose one:**
-
-   **Option A: Set UID/GID in .env (recommended)**
-   ```bash
-   # Get your UID and GID
-   YOUR_UID=$(id -u)
-   YOUR_GID=$(id -g)
-   
-   # Update .env
-   sed -i "s/AIGATEWAY_UID=1000/AIGATEWAY_UID=$YOUR_UID/" .env
-   sed -i "s/AIGATEWAY_GID=1000/AIGATEWAY_GID=$YOUR_GID/" .env
-   
-   # Rebuild and restart
-   docker compose down -v
-   docker compose up -d --build
-   ```
-
-   **Option B: Fix permissions on host (if UID/GID mismatch)**
-   ```bash
-   # Recursively fix permissions for existing data
-   sudo chown -R 1000:1000 data/ logs/
-   sudo chmod -R 755 data/ logs/
-   ```
-
-   **Option C: Re-initialize (nuclear option)**
-   ```bash
-   # Remove everything and start fresh
-   docker compose down -v
-   rm -rf data logs
-   mkdir -p data logs
-   docker compose up -d --build
-   ```
-
-### Container exits or logs show permission denied
+### Test Checklist
 
 ```bash
-# 1. Check what UID/GID the container is trying to use
-docker compose exec aigateway id
+# 1. Health check (public, no auth)
+curl http://localhost:8080/health
+# Expected: 200 { "status": "healthy" }
 
-# 2. Compare with host directories
-ls -la data/ logs/
+# 2. Create key with master key (allowed)
+curl -X POST http://localhost:8080/v1/keys/create \
+  -H "x-api-key: 12345678-1234-1234-1234-123456789012" \
+  -H "Content-Type: application/json" \
+  -d '{"appName":"TestApp","appContact":"test@example.com"}'
+# Expected: 201 with client key GUID
 
-# 3. If mismatch, update .env with correct AIGATEWAY_UID/AIGATEWAY_GID
-# and rebuild the container
-docker compose down
-docker compose up -d --build
+# 3. Create key with client key (forbidden)
+curl -X POST http://localhost:8080/v1/keys/create \
+  -H "x-api-key: <CLIENT_KEY_FROM_STEP_2>" \
+  -H "Content-Type: application/json" \
+  -d '{"appName":"Another","appContact":"another@example.com"}'
+# Expected: 403 "Client keys cannot manage API keys"
+
+# 4. Generate text with client key (allowed)
+curl -X POST http://localhost:8080/v1/ollama/api/generate \
+  -H "x-api-key: <CLIENT_KEY_FROM_STEP_2>" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"llama3.2","prompt":"test","stream":false}'
+# Expected: 200 (proxied to Ollama)
+
+# 5. Generate text with master key (forbidden)
+curl -X POST http://localhost:8080/v1/ollama/api/generate \
+  -H "x-api-key: 12345678-1234-1234-1234-123456789012" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"llama3.2","prompt":"test","stream":false}'
+# Expected: 403 "Master keys cannot access Ollama endpoints"
+
+# 6. Diagnostics with master key (allowed)
+curl http://localhost:8080/diag/ollama \
+  -H "x-api-key: 12345678-1234-1234-1234-123456789012"
+# Expected: 200 with version + generate test results
+
+# 7. Diagnostics with client key (forbidden)
+curl http://localhost:8080/diag/ollama \
+  -H "x-api-key: <CLIENT_KEY_FROM_STEP_2>"
+# Expected: 403 "Client keys cannot access diagnostics"
 ```
 
-### Health check fails
+## Logging
 
-```bash
-# Check if /health endpoint responds
-curl -v http://localhost:8080/health
+Startup logs include:
+- Environment (Development/Production)
+- Database path
+- Upstream service URLs
+- HTTP/1.1 forcing status (if configured)
+- Auth policy summary
 
-# Check container logs
-docker compose logs -f aigateway | grep -i health
-
-# Verify application started
-docker compose logs aigateway | head -50
+Example startup output:
+```
+[INF] ===== AiGateway Startup Summary =====
+[INF] Environment: Production
+[INF] Database: /data/apikeys.sqlite
+[INF] Upstreams: Ollama=http://10.64.10.5:11434, Speaches=http://10.64.10.4:8000
+[INF] Auth Policies: Master can access /v1/keys + /diag; Client can access /v1/ollama + /v1/speaches
+[INF] Listening on: http://+:8080
+[INF] =====================================
 ```
 
-### Database connection string errors
+---
 
-Ensure:
-- `./data` directory exists on host: `mkdir -p data`
-- SQLite database path is `/data/apikeys.sqlite`
-- Container user can write to `/data` (see UID/GID section above)
-
-### Docker Compose build fails
-
-```bash
-# Clean rebuild
-docker compose down
-docker system prune -f
-docker compose up -d --build
-```
-
-## Project Structure
-
-```
-AiGateway/
-├── Data/                      # EF Core DbContext and migrations
-├── Dtos/                      # Data transfer objects
-├── Endpoints/                 # Minimal API endpoint definitions
-├── Middleware/                # Custom middleware
-├── Services/                  # Business logic (Ollama, hashing, etc.)
-├── appsettings.json          # Default configuration
-├── appsettings.Development.json
-├── Program.cs                 # Application startup
-└── AiGateway.csproj
-
-Docker/
-├── Dockerfile                 # Multi-stage Docker build
-├── docker-compose.yml         # Docker Compose configuration
-├── entrypoint.sh             # Permission handling script
-├── .dockerignore             # Docker ignore patterns
-└── .env.example              # Example environment variables
-```
-
-## License
-
-Proprietary - All rights reserved
+## Configuration
