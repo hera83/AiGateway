@@ -2,7 +2,6 @@ using AiGateway.Data;
 using AiGateway.Endpoints;
 using AiGateway.Middleware;
 using AiGateway.Services;
-using AiGateway.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
@@ -70,17 +69,6 @@ try
     builder.Services.AddScoped<IHashingService, HashingService>();
     builder.Services.AddScoped<IClientKeyService, ClientKeyService>();
     builder.Services.AddSingleton(masterKey);
-
-    // Configure Ollama service
-    builder.Services.Configure<OllamaOptions>(options =>
-    {
-        options.BaseUrl = ollamaBaseUrl;
-        options.DefaultModel = config["Ollama:DefaultModel"] ?? "llama3.2";
-        options.RequestTimeoutSeconds = int.TryParse(config["Ollama:RequestTimeoutSeconds"], out var timeout) ? timeout : 120;
-        options.DefaultKeepAlive = config["Ollama:DefaultKeepAlive"];
-    });
-    
-    builder.Services.AddHttpClient<IOllamaService, OllamaService>();
 
     builder.Services.AddHttpClient("speaches", client =>
     {
