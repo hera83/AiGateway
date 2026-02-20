@@ -36,6 +36,7 @@ try
     var speachesBaseUrl = config["Upstreams:SpeachesBaseUrl"];
     var ollamaBaseUrl = config["Upstreams:OllamaBaseUrl"];
     var ollamaAuthorization = config["Upstreams:OllamaAuthorization"];
+    var speachesTimeoutSeconds = config.GetValue<int>("Upstreams:SpeachesTimeoutSeconds", 900); // Default 15 minutes
     var enableHttpsRedirection = config.GetValue<bool>("Gateway:EnableHttpsRedirection", true);
     var forceHttp11ForOllama = config.GetValue<bool>("Gateway:ForceHttp11ForOllama", false);
     var maxRequestBodyMb = config.GetValue<int>("Gateway:MaxRequestBodyMb", 300); // Default 300MB
@@ -62,6 +63,7 @@ try
 
     Log.Information("Environment: {Environment}", builder.Environment.EnvironmentName);
     Log.Information("Upstreams: OllamaBaseUrl={OllamaBaseUrl}, SpeachesBaseUrl={SpeachesBaseUrl}", ollamaBaseUrl, speachesBaseUrl);
+    Log.Information("Speaches timeout: {TimeoutSeconds} seconds ({TimeoutMinutes:F1} minutes)", speachesTimeoutSeconds, speachesTimeoutSeconds / 60.0);
     Log.Information("Ollama ForceHttp11: {ForceHttp11}", forceHttp11ForOllama);
     Log.Information("Max request body size: {MaxMb}MB ({MaxBytes} bytes)", maxRequestBodyMb, maxRequestBodyBytes);
     Log.Information("Multipart body length limit: {LimitBytes} bytes", multipartBodyLengthLimitBytes);
@@ -99,7 +101,7 @@ try
     {
         var baseUrl = speachesBaseUrl.EndsWith("/", StringComparison.Ordinal) ? speachesBaseUrl : $"{speachesBaseUrl}/";
         client.BaseAddress = new Uri(baseUrl);
-        client.Timeout = Timeout.InfiniteTimeSpan;
+        client.Timeout = TimeSpan.FromSeconds(speachesTimeoutSeconds);
     });
 
     builder.Services.AddHttpClient("ollama", client =>
@@ -248,6 +250,7 @@ try
     Log.Information("Environment: {Environment}", builder.Environment.EnvironmentName);
     Log.Information("Database: {DbPath}", databasePath);
     Log.Information("Upstreams: Ollama={Ollama}, Speaches={Speaches}", ollamaBaseUrl, speachesBaseUrl);
+    Log.Information("Speaches timeout: {TimeoutSeconds}s ({TimeoutMinutes:F1}m)", speachesTimeoutSeconds, speachesTimeoutSeconds / 60.0);
     Log.Information("Auth Policies: Master can access /v1/keys; Client can access /v1/ollama + /v1/speaches");
     Log.Information("Max request body: {MaxMb}MB ({MaxBytes} bytes)", maxRequestBodyMb, maxRequestBodyBytes);
     Log.Information("Multipart limit: {LimitBytes} bytes", multipartBodyLengthLimitBytes);
