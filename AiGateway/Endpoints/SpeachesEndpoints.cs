@@ -114,6 +114,13 @@ public static class SpeachesEndpoints
 
     private static Task<IResult> TranscribeAudio(HttpContext context, IHttpClientFactory httpClientFactory)
     {
+        // Allow unlimited request size for audio upload
+        var maxRequestBodySizeFeature = context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+        if (maxRequestBodySizeFeature != null)
+        {
+            maxRequestBodySizeFeature.MaxRequestBodySize = null; // Unlimited
+        }
+
         return UpstreamForwarder.ForwardAsync(
             context,
             httpClientFactory,
@@ -125,6 +132,13 @@ public static class SpeachesEndpoints
 
     private static Task<IResult> TranslateAudio(HttpContext context, IHttpClientFactory httpClientFactory)
     {
+        // Allow unlimited request size for audio upload
+        var maxRequestBodySizeFeature = context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+        if (maxRequestBodySizeFeature != null)
+        {
+            maxRequestBodySizeFeature.MaxRequestBodySize = null; // Unlimited
+        }
+
         return UpstreamForwarder.ForwardAsync(
             context,
             httpClientFactory,

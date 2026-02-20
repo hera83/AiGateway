@@ -42,6 +42,9 @@ AiGateway fungerer som en sikker proxy mellem dine applikationer og AI-tjenester
    AIGATEWAY_MASTER_KEY=dit-unikke-guid-her
    OLLAMA_BASE_URL=http://10.64.10.5:11434
    SPEACHES_BASE_URL=http://10.64.10.4:8000
+   
+   # For store lydfiler (default 300MB, øg hvis nødvendigt)
+   Gateway__MaxRequestBodyMb=300
    ```
 
 4. **Start gateway:**
@@ -58,6 +61,13 @@ AiGateway fungerer som en sikker proxy mellem dine applikationer og AI-tjenester
 - **API**: http://localhost:8080
 - **Swagger UI**: http://localhost:8080/swagger
 - **Health check**: http://localhost:8080/health
+
+**Bemærk store audio uploads:**
+Hvis du får fejlen "Request body too large" ved upload af store lydfiler til Speaches transcription endpoint, øg `Gateway__MaxRequestBodyMb` i `.env` filen:
+```env
+# For filer op til 500MB
+Gateway__MaxRequestBodyMb=500
+```
 
 ### Lokal udvikling (uden Docker)
 

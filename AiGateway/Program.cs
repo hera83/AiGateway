@@ -37,6 +37,7 @@ try
     var ollamaAuthorization = config["Upstreams:OllamaAuthorization"];
     var enableHttpsRedirection = config.GetValue<bool>("Gateway:EnableHttpsRedirection", true);
     var forceHttp11ForOllama = config.GetValue<bool>("Gateway:ForceHttp11ForOllama", false);
+    var maxRequestBodyMb = config.GetValue<int>("Gateway:MaxRequestBodyMb", 300); // Default 300MB
 
     // Validate required config for actual runtime
     if (string.IsNullOrWhiteSpace(masterKey))
@@ -55,6 +56,14 @@ try
     Log.Information("Environment: {Environment}", builder.Environment.EnvironmentName);
     Log.Information("Upstreams: OllamaBaseUrl={OllamaBaseUrl}, SpeachesBaseUrl={SpeachesBaseUrl}", ollamaBaseUrl, speachesBaseUrl);
     Log.Information("Ollama ForceHttp11: {ForceHttp11}", forceHttp11ForOllama);
+    Log.Information("Max request body size: {MaxMb}MB", maxRequestBodyMb);
+
+    // Configure Kestrel max request body size
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        // Set global max request body size (for most endpoints)
+        options.Limits.MaxRequestBodySize = maxRequestBodyMb * 1024 * 1024; // Convert MB to bytes
+    });
 
     // Ensure database directory exists
     var dbDir = Path.GetDirectoryName(databasePath);
@@ -224,6 +233,7 @@ try
     Log.Information("Database: {DbPath}", databasePath);
     Log.Information("Upstreams: Ollama={Ollama}, Speaches={Speaches}", ollamaBaseUrl, speachesBaseUrl);
     Log.Information("Auth Policies: Master can access /v1/keys; Client can access /v1/ollama + /v1/speaches");
+    Log.Information("Max request body: {MaxMb}MB", maxRequestBodyMb);
     Log.Information("Listening on: {Urls}", string.Join(", ", app.Urls));
     Log.Information("=====================================");
 
