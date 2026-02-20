@@ -46,6 +46,14 @@ mkdir -p data logs
 - `AIGATEWAY_UID` / `AIGATEWAY_GID` (optional, default 1000)
 - `SPEACHES_BASE_URL`
 - `OLLAMA_BASE_URL`
+- `Gateway__ForceHttp11ForOllama` (optional: true/false)
+
+### Diagnostics
+
+- `GET /diag/upstreams` (master key only)
+  - Tests Ollama `/api/version`
+  - Tests Ollama `/api/generate` (stream=false)
+  - Returns status + response snippet
 
 ### Database Schema
 

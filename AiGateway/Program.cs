@@ -8,6 +8,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using Swashbuckle.AspNetCore.SwaggerUI;
+using System.Net;
+using System.Text;
+using System.Text.Json;
 
 // Configure Serilog
 Log.Logger = new LoggerConfiguration()
@@ -36,6 +39,7 @@ try
     var ollamaBaseUrl = config["Upstreams:OllamaBaseUrl"];
     var ollamaAuthorization = config["Upstreams:OllamaAuthorization"];
     var enableHttpsRedirection = config.GetValue<bool>("Gateway:EnableHttpsRedirection", true);
+    var forceHttp11ForOllama = config.GetValue<bool>("Gateway:ForceHttp11ForOllama", false);
 
     // Validate required config for actual runtime
     if (string.IsNullOrWhiteSpace(masterKey))
@@ -50,6 +54,10 @@ try
     {
         throw new InvalidOperationException("OllamaBaseUrl not configured");
     }
+
+    Log.Information("Environment: {Environment}", builder.Environment.EnvironmentName);
+    Log.Information("Upstreams: OllamaBaseUrl={OllamaBaseUrl}, SpeachesBaseUrl={SpeachesBaseUrl}", ollamaBaseUrl, speachesBaseUrl);
+    Log.Information("Ollama ForceHttp11: {ForceHttp11}", forceHttp11ForOllama);
 
     // Ensure database directory exists
     var dbDir = Path.GetDirectoryName(databasePath);
@@ -88,6 +96,12 @@ try
         var baseUrl = ollamaBaseUrl.EndsWith("/", StringComparison.Ordinal) ? ollamaBaseUrl : $"{ollamaBaseUrl}/";
         client.BaseAddress = new Uri(baseUrl);
         client.Timeout = Timeout.InfiniteTimeSpan;
+
+        if (forceHttp11ForOllama)
+        {
+            client.DefaultRequestVersion = HttpVersion.Version11;
+            client.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact;
+        }
         
         // Add Authorization header to Ollama upstream if configured
         if (!string.IsNullOrWhiteSpace(ollamaAuthorization))
@@ -206,6 +220,50 @@ try
     app.MapKeyManagementEndpoints();
     app.MapSpeachesEndpoints();
     app.MapOllamaEndpoints();
+
+    // Diagnostic endpoint for upstreams (MasterOnly)
+    app.MapGet("/diag/upstreams", async (IHttpClientFactory httpClientFactory, IConfiguration configuration, HttpContext httpContext) =>
+        {
+            var client = httpClientFactory.CreateClient("ollama");
+            var model = configuration["Ollama:DefaultModel"] ?? "llama3.2";
+
+            static string Truncate(string value, int max)
+            {
+                if (string.IsNullOrEmpty(value) || value.Length <= max)
+                {
+                    return value;
+                }
+
+                return value.Substring(0, max);
+            }
+
+            async Task<object> ProbeAsync(HttpRequestMessage request)
+            {
+                using var response = await client.SendAsync(request, httpContext.RequestAborted);
+                var body = await response.Content.ReadAsStringAsync(httpContext.RequestAborted);
+                return new
+                {
+                    ok = response.IsSuccessStatusCode,
+                    status = (int)response.StatusCode,
+                    body = Truncate(body, 4096)
+                };
+            }
+
+            var version = await ProbeAsync(new HttpRequestMessage(HttpMethod.Get, "api/version"));
+
+            var payload = JsonSerializer.Serialize(new { model, prompt = "ping", stream = false });
+            var generateRequest = new HttpRequestMessage(HttpMethod.Post, "api/generate")
+            {
+                Content = new StringContent(payload, Encoding.UTF8, "application/json")
+            };
+            var generate = await ProbeAsync(generateRequest);
+
+            return Results.Ok(new { version, generate });
+        })
+        .RequireAuthorization("MasterOnly")
+        .WithTags("Diagnostics")
+        .WithSummary("Test upstream connectivity")
+        .WithDescription("Tests Ollama /api/version and /api/generate from inside the running container.");
 
     // Redirect root to Swagger UI for convenience
     app.MapGet("/", () => Results.Redirect("/swagger"))

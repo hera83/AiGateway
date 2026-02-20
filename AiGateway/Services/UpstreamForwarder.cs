@@ -20,6 +20,17 @@ public static class UpstreamForwarder
         "Upgrade"
     };
 
+    private static readonly HashSet<string> DiagnosticHeaders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Server",
+        "WWW-Authenticate",
+        "Via",
+        "X-Powered-By",
+        "X-Frame-Options",
+        "Content-Type",
+        "Content-Length"
+    };
+
     public static async Task<IResult> ForwardAsync(
         HttpContext context,
         IHttpClientFactory httpClientFactory,
@@ -83,11 +94,14 @@ public static class UpstreamForwarder
                 var upstreamBody = await SafeReadBodyAsync(upstreamResponse, context.RequestAborted);
                 var truncatedBody = Truncate(upstreamBody, 4096);
 
+                var diagnosticHeaders = ExtractDiagnosticHeaders(upstreamResponse);
+
                 Log.Warning(
-                    "Upstream {Service} {Action} returned {StatusCode}. Body: {Body}",
+                    "Upstream {Service} {Action} returned {StatusCode}. Headers: {DiagnosticHeaders}. Body: {Body}",
                     areaName,
                     actionName,
                     (int)upstreamResponse.StatusCode,
+                    diagnosticHeaders,
                     truncatedBody);
 
                 var status = upstreamResponse.StatusCode is System.Net.HttpStatusCode.ServiceUnavailable or System.Net.HttpStatusCode.GatewayTimeout
@@ -144,6 +158,7 @@ public static class UpstreamForwarder
         }
         catch (HttpRequestException ex)
         {
+            Log.Error(ex, "Upstream {Service} {Action} connection failed: {Message}", areaName, actionName, ex.Message);
             return ErrorResponseWriter.ToResult(
                 context,
                 StatusCodes.Status502BadGateway,
@@ -152,14 +167,16 @@ public static class UpstreamForwarder
         }
         catch (TaskCanceledException)
         {
+            Log.Error("Upstream {Service} {Action} timeout", areaName, actionName);
             return ErrorResponseWriter.ToResult(
                 context,
                 StatusCodes.Status503ServiceUnavailable,
                 "BAD_GATEWAY",
                 "Upstream service timeout");
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Log.Error(ex, "Upstream {Service} {Action} unexpected error: {Message}", areaName, actionName, ex.Message);
             return ErrorResponseWriter.ToResult(
                 context,
                 StatusCodes.Status502BadGateway,
@@ -182,5 +199,28 @@ public static class UpstreamForwarder
         }
 
         return value.Substring(0, maxLength);
+    }
+
+    private static string ExtractDiagnosticHeaders(HttpResponseMessage response)
+    {
+        var headers = new List<string>();
+
+        foreach (var header in response.Headers)
+        {
+            if (DiagnosticHeaders.Contains(header.Key))
+            {
+                headers.Add($"{header.Key}={string.Join(",", header.Value)}");
+            }
+        }
+
+        foreach (var header in response.Content.Headers)
+        {
+            if (DiagnosticHeaders.Contains(header.Key))
+            {
+                headers.Add($"{header.Key}={string.Join(",", header.Value)}");
+            }
+        }
+
+        return string.Join("; ", headers);
     }
 }
