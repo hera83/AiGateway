@@ -47,18 +47,39 @@ mkdir -p data logs
 - `SPEACHES_BASE_URL`
 - `OLLAMA_BASE_URL`
 - `Gateway__ForceHttp11ForOllama` (optional: true/false)
-- `Proxy__StripSensitiveHeaders` (optional: true/false, default true)
 
-### Header Filtering
+### Header Filtering (Strict Allowlist)
 
-The gateway **automatically strips sensitive headers** before forwarding to upstream services to prevent auth leakage:
+The gateway uses a **strict allowlist** for headers forwarded to upstream services. Only safe, essential headers are forwarded:
 
-**Blocked Headers:**
-- Authentication: `x-api-key`, `authorization`, `cookie`, `set-cookie`
-- Proxying metadata: `x-forwarded-for`, `x-forwarded-proto`, `x-forwarded-host`, `forwarded`
-- Infrastructure: `host`, `content-length`, hop-by-hop headers
+**Default Allowed Headers:**
+- `Accept` - Content negotiation
+- `Content-Type` - Request body type
+- `User-Agent` - Client identification (optional)
+- `Accept-Encoding` - Compression support (optional)
+- `Accept-Language` - Language preference (optional)
 
-**Debugging:** Set `Proxy__StripSensitiveHeaders=false` to disable filtering (development only).
+**Automatically Blocked (Never Forwarded):**
+- Authentication: `x-api-key`, `authorization`, `cookie`
+- Browser metadata: `origin`, `referer`, `sec-fetch-*`, `sec-ch-ua-*`, `dnt`
+- Infrastructure: `host`, `content-length`, `connection`, hop-by-hop headers
+- Proxy metadata: `x-forwarded-*`, `forwarded`, `via`
+
+**Custom Configuration:**
+```json
+"Proxy": {
+  "AllowedRequestHeaders": [
+    "Accept",
+    "Content-Type",
+    "User-Agent"
+  ]
+}
+```
+
+**Why Strict Allowlist?**
+- Prevents browser headers (Origin, Referer) from causing upstream 403 errors
+- Ensures identical upstream requests regardless of gateway auth method
+- Blocks all potentially sensitive metadata by default
 
 ### Diagnostics
 

@@ -20,16 +20,13 @@ public static class UpstreamForwarder
         "Upgrade"
     };
 
-    private static readonly HashSet<string> SensitiveHeaders = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> DefaultAllowedHeaders = new(StringComparer.OrdinalIgnoreCase)
     {
-        "x-api-key",
-        "authorization",
-        "cookie",
-        "set-cookie",
-        "x-forwarded-for",
-        "x-forwarded-proto",
-        "x-forwarded-host",
-        "forwarded"
+        "Accept",
+        "Content-Type",
+        "User-Agent",
+        "Accept-Encoding",
+        "Accept-Language"
     };
 
     private static readonly HashSet<string> DiagnosticHeaders = new(StringComparer.OrdinalIgnoreCase)
@@ -54,9 +51,19 @@ public static class UpstreamForwarder
         context.Items["proxy_service"] = areaName;
         context.Items["proxy_action"] = actionName;
 
-        // Read config for header stripping
+        // Read config for allowed headers
         var config = context.RequestServices.GetRequiredService<IConfiguration>();
-        var stripSensitiveHeaders = config.GetValue<bool>("Proxy:StripSensitiveHeaders", true);
+        var allowedHeadersList = config.GetSection("Proxy:AllowedRequestHeaders").Get<string[]>();
+        
+        HashSet<string> allowedHeaders;
+        if (allowedHeadersList != null && allowedHeadersList.Length > 0)
+        {
+            allowedHeaders = new HashSet<string>(allowedHeadersList, StringComparer.OrdinalIgnoreCase);
+        }
+        else
+        {
+            allowedHeaders = DefaultAllowedHeaders;
+        }
 
         try
         {
@@ -80,41 +87,54 @@ public static class UpstreamForwarder
             {
                 var headerName = header.Key;
 
-                // Check if header should be dropped
+                // Always drop hop-by-hop headers
                 if (HopByHopHeaders.Contains(headerName))
                 {
                     droppedHeaders.Add($"{headerName}(hop-by-hop)");
                     continue;
                 }
 
-                if (stripSensitiveHeaders && SensitiveHeaders.Contains(headerName))
+                // Always drop Host and Content-Length (auto-managed by HttpClient)
+                if (headerName.Equals("Host", StringComparison.OrdinalIgnoreCase) ||
+                    headerName.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
                 {
-                    droppedHeaders.Add($"{headerName}(sensitive)");
+                    droppedHeaders.Add($"{headerName}(infrastructure)");
                     continue;
                 }
 
-                if (headerName.Equals("Host", StringComparison.OrdinalIgnoreCase))
+                // Content-* headers: handle specially for request body
+                if (headerName.StartsWith("Content-", StringComparison.OrdinalIgnoreCase))
                 {
-                    droppedHeaders.Add($"{headerName}(host)");
+                    if (upstreamRequest.Content != null)
+                    {
+                        // Only forward Content-Type and Content-Encoding for body
+                        if (headerName.Equals("Content-Type", StringComparison.OrdinalIgnoreCase) ||
+                            headerName.Equals("Content-Encoding", StringComparison.OrdinalIgnoreCase))
+                        {
+                            upstreamRequest.Content.Headers.TryAddWithoutValidation(headerName, header.Value.ToArray());
+                            forwardedHeaders.Add(headerName);
+                        }
+                        else
+                        {
+                            droppedHeaders.Add($"{headerName}(content-header)");
+                        }
+                    }
+                    else
+                    {
+                        droppedHeaders.Add($"{headerName}(no-body)");
+                    }
                     continue;
                 }
 
-                if (headerName.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
+                // STRICT ALLOWLIST: only forward if in allowed list
+                if (allowedHeaders.Contains(headerName))
                 {
-                    droppedHeaders.Add($"{headerName}(content-length)");
-                    continue;
-                }
-
-                // Forward the header
-                if (upstreamRequest.Content != null && headerName.StartsWith("Content-", StringComparison.OrdinalIgnoreCase))
-                {
-                    upstreamRequest.Content.Headers.TryAddWithoutValidation(headerName, header.Value.ToArray());
+                    upstreamRequest.Headers.TryAddWithoutValidation(headerName, header.Value.ToArray());
                     forwardedHeaders.Add(headerName);
                 }
                 else
                 {
-                    upstreamRequest.Headers.TryAddWithoutValidation(headerName, header.Value.ToArray());
-                    forwardedHeaders.Add(headerName);
+                    droppedHeaders.Add($"{headerName}(not-allowed)");
                 }
             }
 
@@ -122,7 +142,7 @@ public static class UpstreamForwarder
             if (forwardedHeaders.Count > 0 || droppedHeaders.Count > 0)
             {
                 Log.Debug(
-                    "Upstream {Service} {Action}: forwarded={ForwardedHeaders}, dropped={DroppedHeaders}",
+                    "Upstream {Service} {Action}: forwarded=[{ForwardedHeaders}], dropped=[{DroppedHeaders}]",
                     areaName,
                     actionName,
                     string.Join(", ", forwardedHeaders),
