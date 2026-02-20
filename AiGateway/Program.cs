@@ -28,11 +28,27 @@ try
 
     // Read configuration
     var config = builder.Configuration;
-    var masterKey = config["Gateway:MasterKey"] ?? throw new InvalidOperationException("MasterKey not configured");
-    var databasePath = config["Gateway:DatabasePath"] ?? throw new InvalidOperationException("DatabasePath not configured");
-    var speachesBaseUrl = config["Upstreams:SpeachesBaseUrl"] ?? throw new InvalidOperationException("SpeachesBaseUrl not configured");
-    var ollamaBaseUrl = config["Upstreams:OllamaBaseUrl"] ?? throw new InvalidOperationException("OllamaBaseUrl not configured");
+    
+    // For EF Core migrations to work, we need to handle missing config gracefully
+    var masterKey = config["Gateway:MasterKey"];
+    var databasePath = config["Gateway:DatabasePath"] ?? "data/apikeys.sqlite";
+    var speachesBaseUrl = config["Upstreams:SpeachesBaseUrl"];
+    var ollamaBaseUrl = config["Upstreams:OllamaBaseUrl"];
     var enableHttpsRedirection = config.GetValue<bool>("Gateway:EnableHttpsRedirection", true);
+    
+    // Validate required config for actual runtime
+    if (string.IsNullOrWhiteSpace(masterKey))
+    {
+        throw new InvalidOperationException("MasterKey not configured (set Gateway:MasterKey env var)");
+    }
+    if (string.IsNullOrWhiteSpace(speachesBaseUrl))
+    {
+        throw new InvalidOperationException("SpeachesBaseUrl not configured");
+    }
+    if (string.IsNullOrWhiteSpace(ollamaBaseUrl))
+    {
+        throw new InvalidOperationException("OllamaBaseUrl not configured");
+    }
 
     // Ensure database directory exists
     var dbDir = Path.GetDirectoryName(databasePath);

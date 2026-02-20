@@ -47,6 +47,26 @@ mkdir -p data logs
 - `SPEACHES_BASE_URL`
 - `OLLAMA_BASE_URL`
 
+### Database Schema
+
+The gateway uses **SQLite** with **EF Core migrations** for database schema management.
+
+**Automatic Setup**: On first startup, the application automatically:
+1. Creates the `/data` directory if missing
+2. Runs pending EF Core migrations via `dbContext.Database.Migrate()`
+3. Creates the `ClientKeys` table in SQLite
+
+**Schema Location**: `/data/apikeys.sqlite` (inside container)
+
+**No manual SQL required** - the schema is created automatically from migrations in `AiGateway/Migrations/`.
+
+If you need to recreate the database:
+```bash
+docker compose down -v
+rm -rf data/
+docker compose up -d --build
+```
+
 ## Architecture
 
 ### Components
