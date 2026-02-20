@@ -124,8 +124,9 @@ This design ensures:
 - `POST /api/ollama/chat` - Chat completion
 - `POST /api/ollama/embed` - Generate embeddings
 - `GET /api/ollama/models` - List models
-- `POST /api/ollama/pull` - Download model
-- `POST /api/ollama/delete` - Delete model
+- `POST /api/ollama/pull` - Download model (master key only)
+- `POST /api/ollama/delete` - Delete model (master key only)
+- `GET /api/ollama/self-check` - Self-check Ollama upstream
 
 ### Speaches (Forwarded)
 - `POST /api/speaches/**` - All Speaches requests forwarded

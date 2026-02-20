@@ -37,8 +37,7 @@ public class StatusCodeErrorMiddleware
         }
 
         var statusCode = context.Response.StatusCode;
-        
-        // Map status codes to ErrorDto responses
+
         if (statusCode == StatusCodes.Status400BadRequest)
         {
             Log.Warning("Returning 400 Bad Request for {Path}", context.Request.Path);
@@ -51,12 +50,13 @@ public class StatusCodeErrorMiddleware
         }
         else if (statusCode == StatusCodes.Status403Forbidden)
         {
-            // Determine detailed reason for 403
             var reason = "Access denied";
-            var isMaster = context.User.FindFirst("is_master")?.Value == "true";
+            var isMasterClaim = context.User.FindFirst("is_master")?.Value;
+            var isMaster = isMasterClaim == "true";
+            var isClient = isMasterClaim == "false";
             var keyId = context.User.FindFirst("key_id")?.Value;
             var appName = context.User.FindFirst("app_name")?.Value ?? "unknown";
-            
+
             if (isMaster && context.Request.Path.StartsWithSegments("/v1/ollama", StringComparison.OrdinalIgnoreCase))
             {
                 reason = "Master keys cannot access Ollama endpoints (client key required)";
@@ -65,11 +65,11 @@ public class StatusCodeErrorMiddleware
             {
                 reason = "Master keys cannot access Speaches endpoints (client key required)";
             }
-            else if (!isMaster && context.Request.Path.StartsWithSegments("/v1/keys", StringComparison.OrdinalIgnoreCase))
+            else if (isClient && context.Request.Path.StartsWithSegments("/v1/keys", StringComparison.OrdinalIgnoreCase))
             {
                 reason = "Client keys cannot manage API keys (master key required)";
             }
-            
+
             Log.Warning(
                 "Returning 403 Forbidden for {Method} {Path}: {Reason} (IsMaster={IsMaster}, KeyId={KeyId}, App={AppName})",
                 context.Request.Method,
@@ -78,7 +78,7 @@ public class StatusCodeErrorMiddleware
                 isMaster,
                 keyId ?? "N/A",
                 appName);
-            
+
             await ErrorResponseWriter.WriteAsync(context, statusCode, "FORBIDDEN", reason);
         }
         else if (statusCode == StatusCodes.Status404NotFound)

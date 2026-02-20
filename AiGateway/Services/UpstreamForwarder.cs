@@ -1,4 +1,5 @@
 using AiGateway.Middleware;
+using Serilog;
 
 namespace AiGateway.Services;
 
@@ -77,6 +78,30 @@ public static class UpstreamForwarder
                 HttpCompletionOption.ResponseHeadersRead,
                 context.RequestAborted);
 
+            if (!upstreamResponse.IsSuccessStatusCode)
+            {
+                var upstreamBody = await SafeReadBodyAsync(upstreamResponse, context.RequestAborted);
+                var truncatedBody = Truncate(upstreamBody, 4096);
+
+                Log.Warning(
+                    "Upstream {Service} {Action} returned {StatusCode}. Body: {Body}",
+                    areaName,
+                    actionName,
+                    (int)upstreamResponse.StatusCode,
+                    truncatedBody);
+
+                var status = upstreamResponse.StatusCode is System.Net.HttpStatusCode.ServiceUnavailable or System.Net.HttpStatusCode.GatewayTimeout
+                    ? StatusCodes.Status503ServiceUnavailable
+                    : StatusCodes.Status502BadGateway;
+
+                return ErrorResponseWriter.ToResult(
+                    context,
+                    status,
+                    "BAD_GATEWAY",
+                    $"Upstream {areaName} returned HTTP {(int)upstreamResponse.StatusCode}",
+                    new { upstreamStatus = (int)upstreamResponse.StatusCode, upstreamBody = truncatedBody });
+            }
+
             context.Response.StatusCode = (int)upstreamResponse.StatusCode;
 
             foreach (var header in upstreamResponse.Headers)
@@ -129,7 +154,7 @@ public static class UpstreamForwarder
         {
             return ErrorResponseWriter.ToResult(
                 context,
-                StatusCodes.Status502BadGateway,
+                StatusCodes.Status503ServiceUnavailable,
                 "BAD_GATEWAY",
                 "Upstream service timeout");
         }
@@ -141,5 +166,21 @@ public static class UpstreamForwarder
                 "BAD_GATEWAY",
                 "Unexpected upstream error");
         }
+    }
+
+    private static async Task<string> SafeReadBodyAsync(HttpResponseMessage res, CancellationToken ct)
+    {
+        try { return await res.Content.ReadAsStringAsync(ct); }
+        catch { return "<unable to read response body>"; }
+    }
+
+    private static string Truncate(string value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length <= maxLength)
+        {
+            return value;
+        }
+
+        return value.Substring(0, maxLength);
     }
 }

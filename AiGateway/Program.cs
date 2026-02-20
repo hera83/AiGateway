@@ -34,8 +34,9 @@ try
     var databasePath = config["Gateway:DatabasePath"] ?? "data/apikeys.sqlite";
     var speachesBaseUrl = config["Upstreams:SpeachesBaseUrl"];
     var ollamaBaseUrl = config["Upstreams:OllamaBaseUrl"];
+    var ollamaAuthorization = config["Upstreams:OllamaAuthorization"];
     var enableHttpsRedirection = config.GetValue<bool>("Gateway:EnableHttpsRedirection", true);
-    
+
     // Validate required config for actual runtime
     if (string.IsNullOrWhiteSpace(masterKey))
     {
@@ -87,6 +88,13 @@ try
         var baseUrl = ollamaBaseUrl.EndsWith("/", StringComparison.Ordinal) ? ollamaBaseUrl : $"{ollamaBaseUrl}/";
         client.BaseAddress = new Uri(baseUrl);
         client.Timeout = Timeout.InfiniteTimeSpan;
+        
+        // Add Authorization header to Ollama upstream if configured
+        if (!string.IsNullOrWhiteSpace(ollamaAuthorization))
+        {
+            client.DefaultRequestHeaders.Add("Authorization", ollamaAuthorization);
+            Log.Information("Ollama upstream Authorization header configured");
+        }
     });
 
     // Add authentication
