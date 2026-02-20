@@ -1,14 +1,19 @@
 using Microsoft.AspNetCore.Http;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 
 namespace AiGateway.Dtos;
 
 /// <summary>
-/// Request DTO for audio transcriptions (multipart/form-data or form-encoded).
+/// Request DTO for audio transcriptions (multipart/form-data).
 /// </summary>
 public sealed class SpeachesTranscriptionRequestDto
 {
+    [Required]
+    [MinLength(1)]
     public string Model { get; set; } = string.Empty;
+
+    [Required]
     public IFormFile? File { get; set; }
     public string? Language { get; set; }
     public string? Prompt { get; set; }
@@ -26,11 +31,15 @@ public sealed class SpeachesTranscriptionResponseDto
 }
 
 /// <summary>
-/// Request DTO for audio translations (multipart/form-data or form-encoded).
+/// Request DTO for audio translations (multipart/form-data).
 /// </summary>
 public sealed class SpeachesTranslationRequestDto
 {
+    [Required]
+    [MinLength(1)]
     public string Model { get; set; } = string.Empty;
+
+    [Required]
     public IFormFile? File { get; set; }
     public string? Prompt { get; set; }
     public string? ResponseFormat { get; set; }
@@ -63,11 +72,15 @@ public sealed class SpeachesSpeechResponseDto
 }
 
 /// <summary>
-/// Request DTO for speaker embedding (multipart/form-data or form-encoded).
+/// Request DTO for speaker embedding (multipart/form-data).
 /// </summary>
 public sealed class SpeachesSpeechEmbeddingRequestDto
 {
+    [Required]
+    [MinLength(1)]
     public string Model { get; set; } = string.Empty;
+
+    [Required]
     public IFormFile? File { get; set; }
 }
 

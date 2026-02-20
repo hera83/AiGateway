@@ -16,8 +16,8 @@ public static class SpeachesEndpoints
 
         group.MapPost("/audio/transcriptions", TranscribeAudio)
             .WithSummary("Transcribe audio")
-            .WithDescription("Transcribes audio to text by forwarding to Speaches /v1/audio/transcriptions. Supports multipart or form-encoded requests.")
-            .Accepts<SpeachesTranscriptionRequestDto>("application/x-www-form-urlencoded", "multipart/form-data")
+            .WithDescription("Transcribes audio to text by forwarding to Speaches /v1/audio/transcriptions. Requires multipart/form-data with 'file' and 'model' fields.")
+            .Accepts<SpeachesTranscriptionRequestDto>("multipart/form-data")
             .Produces<SpeachesTranscriptionResponseDto>(StatusCodes.Status200OK)
             .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
             .Produces<ErrorDto>(StatusCodes.Status401Unauthorized)
@@ -26,8 +26,8 @@ public static class SpeachesEndpoints
 
         group.MapPost("/audio/translations", TranslateAudio)
             .WithSummary("Translate audio")
-            .WithDescription("Translates audio to text by forwarding to Speaches /v1/audio/translations. Supports multipart or form-encoded requests.")
-            .Accepts<SpeachesTranslationRequestDto>("application/x-www-form-urlencoded", "multipart/form-data")
+            .WithDescription("Translates audio to text by forwarding to Speaches /v1/audio/translations. Requires multipart/form-data with 'file' and 'model' fields.")
+            .Accepts<SpeachesTranslationRequestDto>("multipart/form-data")
             .Produces<SpeachesTranslationResponseDto>(StatusCodes.Status200OK)
             .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
             .Produces<ErrorDto>(StatusCodes.Status401Unauthorized)
@@ -103,8 +103,8 @@ public static class SpeachesEndpoints
 
         group.MapPost("/audio/speech/embedding", CreateSpeechEmbedding)
             .WithSummary("Create speech embedding")
-            .WithDescription("Creates a speaker embedding by forwarding to Speaches /v1/audio/speech/embedding. Supports multipart or form-encoded requests.")
-            .Accepts<SpeachesSpeechEmbeddingRequestDto>("application/x-www-form-urlencoded", "multipart/form-data")
+            .WithDescription("Creates a speaker embedding by forwarding to Speaches /v1/audio/speech/embedding. Requires multipart/form-data with 'file' and 'model' fields.")
+            .Accepts<SpeachesSpeechEmbeddingRequestDto>("multipart/form-data")
             .Produces<SpeachesSpeechEmbeddingResponseDto>(StatusCodes.Status200OK)
             .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
             .Produces<ErrorDto>(StatusCodes.Status401Unauthorized)
@@ -227,6 +227,13 @@ public static class SpeachesEndpoints
 
     private static Task<IResult> CreateSpeechEmbedding(HttpContext context, IHttpClientFactory httpClientFactory)
     {
+        // Allow unlimited request size for audio upload
+        var maxRequestBodySizeFeature = context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+        if (maxRequestBodySizeFeature != null)
+        {
+            maxRequestBodySizeFeature.MaxRequestBodySize = null; // Unlimited
+        }
+
         return UpstreamForwarder.ForwardAsync(
             context,
             httpClientFactory,

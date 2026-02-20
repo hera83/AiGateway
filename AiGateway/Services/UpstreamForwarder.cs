@@ -149,6 +149,21 @@ public static class UpstreamForwarder
                     string.Join(", ", droppedHeaders));
             }
 
+            // Log Content-Type information for Speaches endpoints (for debugging file uploads)
+            if (areaName.Equals("speaches", StringComparison.OrdinalIgnoreCase))
+            {
+                var inboundContentType = context.Request.ContentType ?? "(none)";
+                var outboundContentType = upstreamRequest.Content?.Headers.ContentType?.ToString() ?? "(none)";
+                var hasContentLength = context.Request.ContentLength.HasValue;
+
+                Log.Debug(
+                    "Speaches {Action}: inbound Content-Type=[{InboundContentType}], outbound Content-Type=[{OutboundContentType}], has Content-Length={HasContentLength}",
+                    actionName,
+                    inboundContentType,
+                    outboundContentType,
+                    hasContentLength);
+            }
+
             using var upstreamResponse = await client.SendAsync(
                 upstreamRequest,
                 HttpCompletionOption.ResponseHeadersRead,

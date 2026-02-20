@@ -3,6 +3,7 @@ using AiGateway.Endpoints;
 using AiGateway.Middleware;
 using AiGateway.Services;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Serilog;
@@ -39,6 +40,12 @@ try
     var forceHttp11ForOllama = config.GetValue<bool>("Gateway:ForceHttp11ForOllama", false);
     var maxRequestBodyMb = config.GetValue<int>("Gateway:MaxRequestBodyMb", 300); // Default 300MB
 
+    // Calculate byte limits for various settings
+    var maxRequestBodyBytes = config.GetValue<long?>("Gateway:MaxRequestBodyBytes") 
+        ?? (maxRequestBodyMb * 1024L * 1024L);
+    var multipartBodyLengthLimitBytes = config.GetValue<long?>("Gateway:MultipartBodyLengthLimitBytes") 
+        ?? maxRequestBodyBytes; // Use same as request body by default
+
     // Validate required config for actual runtime
     if (string.IsNullOrWhiteSpace(masterKey))
     {
@@ -56,13 +63,14 @@ try
     Log.Information("Environment: {Environment}", builder.Environment.EnvironmentName);
     Log.Information("Upstreams: OllamaBaseUrl={OllamaBaseUrl}, SpeachesBaseUrl={SpeachesBaseUrl}", ollamaBaseUrl, speachesBaseUrl);
     Log.Information("Ollama ForceHttp11: {ForceHttp11}", forceHttp11ForOllama);
-    Log.Information("Max request body size: {MaxMb}MB", maxRequestBodyMb);
+    Log.Information("Max request body size: {MaxMb}MB ({MaxBytes} bytes)", maxRequestBodyMb, maxRequestBodyBytes);
+    Log.Information("Multipart body length limit: {LimitBytes} bytes", multipartBodyLengthLimitBytes);
 
     // Configure Kestrel max request body size
     builder.WebHost.ConfigureKestrel(options =>
     {
         // Set global max request body size (for most endpoints)
-        options.Limits.MaxRequestBodySize = maxRequestBodyMb * 1024 * 1024; // Convert MB to bytes
+        options.Limits.MaxRequestBodySize = maxRequestBodyBytes;
     });
 
     // Ensure database directory exists
@@ -78,6 +86,14 @@ try
     builder.Services.AddScoped<IHashingService, HashingService>();
     builder.Services.AddScoped<IClientKeyService, ClientKeyService>();
     builder.Services.AddSingleton(masterKey);
+
+    // Configure FormOptions to support large file uploads
+    builder.Services.Configure<FormOptions>(options =>
+    {
+        options.MultipartBodyLengthLimit = multipartBodyLengthLimitBytes;
+        options.ValueLengthLimit = int.MaxValue;
+        options.MultipartHeadersLengthLimit = int.MaxValue;
+    });
 
     builder.Services.AddHttpClient("speaches", client =>
     {
@@ -233,7 +249,8 @@ try
     Log.Information("Database: {DbPath}", databasePath);
     Log.Information("Upstreams: Ollama={Ollama}, Speaches={Speaches}", ollamaBaseUrl, speachesBaseUrl);
     Log.Information("Auth Policies: Master can access /v1/keys; Client can access /v1/ollama + /v1/speaches");
-    Log.Information("Max request body: {MaxMb}MB", maxRequestBodyMb);
+    Log.Information("Max request body: {MaxMb}MB ({MaxBytes} bytes)", maxRequestBodyMb, maxRequestBodyBytes);
+    Log.Information("Multipart limit: {LimitBytes} bytes", multipartBodyLengthLimitBytes);
     Log.Information("Listening on: {Urls}", string.Join(", ", app.Urls));
     Log.Information("=====================================");
 
