@@ -1,191 +1,128 @@
-# AiGateway - API Gateway & Proxy
+# AiGateway
 
-A production-ready .NET 10 Web API gateway with transparent request forwarding, authentication, and API key management. Designed to proxy requests to multiple upstream services while enforcing security policies.
+En produktionsklar .NET 10 API Gateway til AI-tjenester med transparent request forwarding, autentificering og API-nøgle management.
 
-**Supports Docker deployment with persistent data and logs.**
+## Hvad er AiGateway?
 
-## Features
+AiGateway fungerer som en sikker proxy mellem dine applikationer og AI-tjenester (Ollama og Speaches):
 
-- **Transparent Proxy**: Forward requests to upstream services (Speaches and Ollama) with full support for GET/POST/PUT/PATCH/DELETE
-- **Streaming Support**: Handle streaming responses without buffering; ideal for long-running operations
-- **API Key Authentication**: x-api-key header-based authentication with master key and client key separation
-- **SQLite Database**: File-based API key storage with hashed keys and per-key salts
-- **Role-Based Access Control**: Master keys for administration, client keys for service access
-- **Swagger UI**: Built-in API documentation with x-api-key header support for testing
-- **Comprehensive Logging**: Serilog with console and daily rolling file logs
-- **Error Handling**: Consistent ErrorDto responses across all endpoints
-- **EF Core Integration**: Automatic database initialization and schema management
+- **Autentificering**: x-api-key baseret adgangskontrol med master keys (administration) og client keys (AI-tjenester)
+- **Proxy**: Transparent forwarding af requests til upstream services uden at afsløre gateway credentials
+- **Streaming**: Fuld support for streaming responses fra Ollama
+- **Logging**: Struktureret logging med Serilog
 
-## Docker (Recommended)
+## Installation
 
-### Quick Start
+### Docker (Anbefalet)
 
-```bash
-mkdir -p data logs
-cp .env.example .env
+**Forudsætninger:**
+- Docker & Docker Compose installeret
+- Adgang til Ollama og Speaches services
 
-docker compose up -d --build
-```
+**Hurtig start:**
 
-- API: `http://localhost:8080`
-- Swagger: `http://localhost:8080/swagger`
-- Health: `http://localhost:8080/health`
+1. **Klon repository:**
+   ```bash
+   git clone https://github.com/hera83/AiGateway.git
+   cd AiGateway
+   ```
 
-### Permission Handling (Automatic)
+2. **Opret required directories:**
+   ```bash
+   mkdir -p data logs
+   ```
 
-The container starts as `root`, fixes ownership on `/data` and `/logs`, and then drops to the non-root app user using `gosu`. This prevents SQLite Error 14 without manual `chown`.
+3. **Konfigurer environment:**
+   ```bash
+   cp .env.example .env
+   ```
+   
+   Rediger `.env` og sæt:
+   ```env
+   AIGATEWAY_MASTER_KEY=dit-unikke-guid-her
+   OLLAMA_BASE_URL=http://10.64.10.5:11434
+   SPEACHES_BASE_URL=http://10.64.10.4:8000
+   ```
 
-**Requirement:** host folders must exist before starting:
-```bash
-mkdir -p data logs
-```
+4. **Start gateway:**
+   ```bash
+   docker compose up -d --build
+   ```
 
-### Environment Variables (.env)
+5. **Verificer at det kører:**
+   ```bash
+   docker compose logs -f aigateway
+   ```
 
-- `AIGATEWAY_MASTER_KEY` (required)
-- `AIGATEWAY_UID` / `AIGATEWAY_GID` (optional, default 1000)
-- `SPEACHES_BASE_URL`
-- `OLLAMA_BASE_URL`
-- `Gateway__ForceHttp11ForOllama` (optional: true/false)
+**Adgang:**
+- **API**: http://localhost:8080
+- **Swagger UI**: http://localhost:8080/swagger
+- **Health check**: http://localhost:8080/health
 
-### Header Filtering (Strict Allowlist)
+### Lokal udvikling (uden Docker)
 
-The gateway uses a **strict allowlist** for headers forwarded to upstream services. Only safe, essential headers are forwarded:
+**Forudsætninger:**
+- .NET 10 SDK
 
-**Default Allowed Headers:**
-- `Accept` - Content negotiation
-- `Content-Type` - Request body type
-- `User-Agent` - Client identification (optional)
-- `Accept-Encoding` - Compression support (optional)
-- `Accept-Language` - Language preference (optional)
+**Start:**
 
-**Automatically Blocked (Never Forwarded):**
-- Authentication: `x-api-key`, `authorization`, `cookie`
-- Browser metadata: `origin`, `referer`, `sec-fetch-*`, `sec-ch-ua-*`, `dnt`
-- Infrastructure: `host`, `content-length`, `connection`, hop-by-hop headers
-- Proxy metadata: `x-forwarded-*`, `forwarded`, `via`
+1. **Naviger til projekt:**
+   ```bash
+   cd AiGateway
+   ```
 
-**Custom Configuration:**
-```json
-"Proxy": {
-  "AllowedRequestHeaders": [
-    "Accept",
-    "Content-Type",
-    "User-Agent"
-  ]
-}
-```
+2. **Restore dependencies:**
+   ```bash
+   dotnet restore
+   ```
 
-**Why Strict Allowlist?**
-- Prevents browser headers (Origin, Referer) from causing upstream 403 errors
-- Ensures identical upstream requests regardless of gateway auth method
-- Blocks all potentially sensitive metadata by default
+3. **Konfigurer appsettings.json** med dine upstream URLs og master key
 
-### Diagnostics
+4. **Kør applikationen:**
+   ```bash
+   dotnet run
+   ```
 
-- `GET /diag/ollama` (master key only)
-  - Tests Ollama `/api/version`
-  - Tests Ollama `/api/generate` (stream=false)
-  - Returns status + response snippet
+Applikationen starter på https://localhost:5001 og http://localhost:5000.
 
-### Database Schema
+## Basis brug
 
-The gateway uses **SQLite** with **EF Core migrations** for database schema management.
-
-**Automatic Setup**: On first startup, the application automatically:
-1. Creates the `/data` directory if missing
-2. Runs pending EF Core migrations via `dbContext.Database.Migrate()`
-3. Creates the `ClientKeys` table in SQLite
-
-**Schema Location**: `/data/apikeys.sqlite` (inside container)
-
-**No manual SQL required** - the schema is created automatically from migrations in `AiGateway/Migrations/`.
-
-If you need to recreate the database:
-```bash
-docker compose down -v
-rm -rf data/
-docker compose up -d --build
-```
-
----
-
-## Security Model
-
-### Authorization Policies
-
-- **Master Key**: Can access `/v1/keys` (key management) and `/diag/*` (diagnostics)
-  - **Cannot** access `/v1/ollama/*` or `/v1/speaches/*`
-- **Client Key**: Can access `/v1/ollama/*` and `/v1/speaches/*` (AI services)
-  - **Cannot** access `/v1/keys` or `/diag/*`
-- **Public** (no auth needed): `/health`, `/swagger`
-
-### Test Checklist
+### 1. Opret en client key (kræver master key)
 
 ```bash
-# 1. Health check (public, no auth)
-curl http://localhost:8080/health
-# Expected: 200 { "status": "healthy" }
-
-# 2. Create key with master key (allowed)
 curl -X POST http://localhost:8080/v1/keys/create \
-  -H "x-api-key: 12345678-1234-1234-1234-123456789012" \
+  -H "x-api-key: DIT-MASTER-KEY" \
   -H "Content-Type: application/json" \
-  -d '{"appName":"TestApp","appContact":"test@example.com"}'
-# Expected: 201 with client key GUID
+  -d '{"appName":"MinApp","appContact":"kontakt@example.com"}'
+```
 
-# 3. Create key with client key (forbidden)
-curl -X POST http://localhost:8080/v1/keys/create \
-  -H "x-api-key: <CLIENT_KEY_FROM_STEP_2>" \
-  -H "Content-Type: application/json" \
-  -d '{"appName":"Another","appContact":"another@example.com"}'
-# Expected: 403 "Client keys cannot manage API keys"
+### 2. Brug client key til at kalde Ollama
 
-# 4. Generate text with client key (allowed)
+```bash
 curl -X POST http://localhost:8080/v1/ollama/api/generate \
-  -H "x-api-key: <CLIENT_KEY_FROM_STEP_2>" \
+  -H "x-api-key: DIN-CLIENT-KEY" \
   -H "Content-Type: application/json" \
-  -d '{"model":"llama3.2","prompt":"test","stream":false}'
-# Expected: 200 (proxied to Ollama)
-
-# 5. Generate text with master key (forbidden)
-curl -X POST http://localhost:8080/v1/ollama/api/generate \
-  -H "x-api-key: 12345678-1234-1234-1234-123456789012" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"llama3.2","prompt":"test","stream":false}'
-# Expected: 403 "Master keys cannot access Ollama endpoints"
-
-# 6. Diagnostics with master key (allowed)
-curl http://localhost:8080/diag/ollama \
-  -H "x-api-key: 12345678-1234-1234-1234-123456789012"
-# Expected: 200 with version + generate test results
-
-# 7. Diagnostics with client key (forbidden)
-curl http://localhost:8080/diag/ollama \
-  -H "x-api-key: <CLIENT_KEY_FROM_STEP_2>"
-# Expected: 403 "Client keys cannot access diagnostics"
+  -d '{"model":"gemma3:12b","prompt":"Hej verden","stream":false}'
 ```
 
-## Logging
+## Adgangskontrol
 
-Startup logs include:
-- Environment (Development/Production)
-- Database path
-- Upstream service URLs
-- HTTP/1.1 forcing status (if configured)
-- Auth policy summary
+- **Master keys**: Kan kun administrere API-nøgler (`/v1/keys`)
+- **Client keys**: Kan kun tilgå AI-tjenester (`/v1/ollama`, `/v1/speaches`)
+- **Offentlig adgang**: `/health`, `/swagger` (ingen autentificering)
 
-Example startup output:
-```
-[INF] ===== AiGateway Startup Summary =====
-[INF] Environment: Production
-[INF] Database: /data/apikeys.sqlite
-[INF] Upstreams: Ollama=http://10.64.10.5:11434, Speaches=http://10.64.10.4:8000
-[INF] Auth Policies: Master can access /v1/keys + /diag; Client can access /v1/ollama + /v1/speaches
-[INF] Listening on: http://+:8080
-[INF] =====================================
-```
+## Teknisk information
 
----
+- **.NET 10** Minimal API
+- **SQLite** database (EF Core migrations)
+- **Serilog** logging (console + file)
+- **Docker** support med persistent volumes
+- **Swagger/OpenAPI** dokumentation
 
-## Configuration
+## Support
+
+For spørgsmål eller problemer, åbn et issue på [GitHub](https://github.com/hera83/AiGateway/issues).
+
+## Licens
+
+Proprietary - All rights reserved

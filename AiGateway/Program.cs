@@ -9,8 +9,6 @@ using Microsoft.OpenApi.Models;
 using Serilog;
 using Swashbuckle.AspNetCore.SwaggerUI;
 using System.Net;
-using System.Text;
-using System.Text.Json;
 
 // Configure Serilog
 Log.Logger = new LoggerConfiguration()
@@ -221,52 +219,6 @@ try
     app.MapSpeachesEndpoints();
     app.MapOllamaEndpoints();
 
-    // Diagnostic endpoints group (MasterOnly)
-    var diagGroup = app.MapGroup("/diag")
-        .WithTags("Diagnostics")
-        .RequireAuthorization("MasterOnly");
-
-    // Test Ollama connectivity
-    diagGroup.MapGet("/ollama", async (IHttpClientFactory httpClientFactory, IConfiguration configuration, HttpContext httpContext) =>
-        {
-            var client = httpClientFactory.CreateClient("ollama");
-            var model = configuration["Ollama:DefaultModel"] ?? "llama3.2";
-
-            static string Truncate(string value, int max)
-            {
-                if (string.IsNullOrEmpty(value) || value.Length <= max)
-                {
-                    return value;
-                }
-                return value.Substring(0, max);
-            }
-
-            async Task<object> ProbeAsync(HttpRequestMessage request)
-            {
-                using var response = await client.SendAsync(request, httpContext.RequestAborted);
-                var body = await response.Content.ReadAsStringAsync(httpContext.RequestAborted);
-                return new
-                {
-                    ok = response.IsSuccessStatusCode,
-                    status = (int)response.StatusCode,
-                    body = Truncate(body, 4096)
-                };
-            }
-
-            var version = await ProbeAsync(new HttpRequestMessage(HttpMethod.Get, "api/version"));
-
-            var payload = JsonSerializer.Serialize(new { model, prompt = "ping", stream = false });
-            var generateRequest = new HttpRequestMessage(HttpMethod.Post, "api/generate")
-            {
-                Content = new StringContent(payload, Encoding.UTF8, "application/json")
-            };
-            var generate = await ProbeAsync(generateRequest);
-
-            return Results.Ok(new { version, generate });
-        })
-        .WithSummary("Test Ollama upstream")
-        .WithDescription("Tests Ollama /api/version and /api/generate from inside the running container.");
-
     // Redirect root to Swagger UI for convenience
     app.MapGet("/", () => Results.Redirect("/swagger"))
         .ExcludeFromDescription();
@@ -276,14 +228,14 @@ try
         .Produces(StatusCodes.Status200OK)
         .WithName("Health")
         .WithTags("System")
-        .ExcludeFromDescription();
+        .AllowAnonymous();
 
     // Log startup summary
     Log.Information("===== AiGateway Startup Summary =====");
     Log.Information("Environment: {Environment}", builder.Environment.EnvironmentName);
     Log.Information("Database: {DbPath}", databasePath);
     Log.Information("Upstreams: Ollama={Ollama}, Speaches={Speaches}", ollamaBaseUrl, speachesBaseUrl);
-    Log.Information("Auth Policies: Master can access /v1/keys + /diag; Client can access /v1/ollama + /v1/speaches");
+    Log.Information("Auth Policies: Master can access /v1/keys; Client can access /v1/ollama + /v1/speaches");
     Log.Information("Listening on: {Urls}", string.Join(", ", app.Urls));
     Log.Information("=====================================");
 

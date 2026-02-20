@@ -263,42 +263,4 @@ public static class OllamaEndpoints
             "ollama",
             "version");
     }
-
-    private static async Task<IResult> SelfCheck(HttpContext context, IHttpClientFactory httpClientFactory, IConfiguration configuration)
-    {
-        var client = httpClientFactory.CreateClient("ollama");
-        var model = configuration["Ollama:DefaultModel"] ?? "llama3.2";
-
-        var versionResult = new { ok = false, status = 0, body = string.Empty };
-        var generateResult = new { ok = false, status = 0, body = string.Empty };
-
-        try
-        {
-            using var versionResponse = await client.GetAsync("api/version", context.RequestAborted);
-            var versionBody = await versionResponse.Content.ReadAsStringAsync(context.RequestAborted);
-            versionResult = new { ok = versionResponse.IsSuccessStatusCode, status = (int)versionResponse.StatusCode, body = versionBody };
-        }
-        catch (Exception ex)
-        {
-            versionResult = new { ok = false, status = 0, body = ex.Message };
-        }
-
-        try
-        {
-            var payload = new { model, prompt = "ping", stream = false };
-            using var generateResponse = await client.PostAsJsonAsync("api/generate", payload, context.RequestAborted);
-            var generateBody = await generateResponse.Content.ReadAsStringAsync(context.RequestAborted);
-            generateResult = new { ok = generateResponse.IsSuccessStatusCode, status = (int)generateResponse.StatusCode, body = generateBody };
-        }
-        catch (Exception ex)
-        {
-            generateResult = new { ok = false, status = 0, body = ex.Message };
-        }
-
-        return Results.Ok(new
-        {
-            version = versionResult,
-            generate = generateResult
-        });
-    }
 }
