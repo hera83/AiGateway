@@ -98,25 +98,6 @@ public static class SpeachesEndpoints
             .Produces<ErrorDto>(StatusCodes.Status404NotFound)
             .Produces<ErrorDto>(StatusCodes.Status502BadGateway);
 
-        // TTS-specific local assets
-        group.MapGet("/models/tts", ListTtsModels)
-            .WithSummary("List local TTS models")
-            .WithDescription("Lists locally installed text-to-speech models by forwarding to Speaches /v1/audio/models.")
-            .Produces<SpeachesListAudioModelsResponseDto>(StatusCodes.Status200OK)
-            .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
-            .Produces<ErrorDto>(StatusCodes.Status401Unauthorized)
-            .Produces<ErrorDto>(StatusCodes.Status403Forbidden)
-            .Produces<ErrorDto>(StatusCodes.Status502BadGateway);
-
-        group.MapGet("/models/tts/voices", ListTtsVoices)
-            .WithSummary("List available TTS voices")
-            .WithDescription("Lists available text-to-speech voices by forwarding to Speaches /v1/audio/voices.")
-            .Produces<SpeachesListAudioVoicesResponseDto>(StatusCodes.Status200OK)
-            .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
-            .Produces<ErrorDto>(StatusCodes.Status401Unauthorized)
-            .Produces<ErrorDto>(StatusCodes.Status403Forbidden)
-            .Produces<ErrorDto>(StatusCodes.Status502BadGateway);
-
         // Available models from registry - STT
         group.MapGet("/models/available/stt", ListAvailableSttModels)
             .WithSummary("List available STT models (registry)")
@@ -230,34 +211,12 @@ Optional query parameters:
             "models-delete");
     }
 
-    private static Task<IResult> ListTtsModels(HttpContext context, IHttpClientFactory httpClientFactory)
-    {
-        return UpstreamForwarder.ForwardAsync(
-            context,
-            httpClientFactory,
-            "speaches",
-            "/v1/audio/models",
-            "speaches",
-            "tts-models-list");
-    }
-
-    private static Task<IResult> ListTtsVoices(HttpContext context, IHttpClientFactory httpClientFactory)
-    {
-        return UpstreamForwarder.ForwardAsync(
-            context,
-            httpClientFactory,
-            "speaches",
-            "/v1/audio/voices",
-            "speaches",
-            "tts-voices-list");
-    }
-
     private static async Task<IResult> ListAvailableSttModels(
         HttpContext context, 
         IHttpClientFactory httpClientFactory,
-        string? q = null,
-        string? language = null,
-        string? ownedBy = null)
+        [FromQuery] string? q = null,
+        [FromQuery] string? language = null,
+        [FromQuery] string? ownedBy = null)
     {
         return await GetFilteredRegistryModelsAsync(
             context,
@@ -273,11 +232,11 @@ Optional query parameters:
     private static async Task<IResult> ListAvailableTtsModels(
         HttpContext context,
         IHttpClientFactory httpClientFactory,
-        string? q = null,
-        string? language = null,
-        string? voiceLanguage = null,
-        string? ownedBy = null,
-        bool? hasVoices = null)
+        [FromQuery] string? q = null,
+        [FromQuery] string? language = null,
+        [FromQuery] string? voiceLanguage = null,
+        [FromQuery] string? ownedBy = null,
+        [FromQuery] bool? hasVoices = null)
     {
         return await GetFilteredRegistryModelsAsync(
             context,
