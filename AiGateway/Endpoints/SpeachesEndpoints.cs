@@ -116,14 +116,13 @@ Optional query parameters:
         // Available models from registry - TTS
         group.MapGet("/models/available/tts", ListAvailableTtsModels)
             .WithSummary("List available TTS models (registry)")
-            .WithDescription(@"Lists available TTS models from Speaches registry.
+            .WithDescription(@"Lists available TTS models from Speaches registry (only models with voices).
 
 Optional query parameters:
 • q - Search filter (substring match in model ID, case-insensitive)
 • language - Filter by language (matches model.language OR any voice language)
 • voiceLanguage - Filter by voice language specifically
-• ownedBy - Filter by model owner/provider
-• hasVoices - true=only models with voices, false=only models without voices")
+• ownedBy - Filter by model owner/provider")
             .Produces<SpeachesRegistryResponseDto>(StatusCodes.Status200OK)
             .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
             .Produces<ErrorDto>(StatusCodes.Status401Unauthorized)
@@ -235,8 +234,7 @@ Optional query parameters:
         [FromQuery] string? q = null,
         [FromQuery] string? language = null,
         [FromQuery] string? voiceLanguage = null,
-        [FromQuery] string? ownedBy = null,
-        [FromQuery] bool? hasVoices = null)
+        [FromQuery] string? ownedBy = null)
     {
         return await GetFilteredRegistryModelsAsync(
             context,
@@ -246,7 +244,7 @@ Optional query parameters:
             language,
             voiceLanguage,
             ownedBy,
-            hasVoices);
+            true); // Default: only show models with voices
     }
 
     private static async Task<IResult> GetFilteredRegistryModelsAsync(
