@@ -1,5 +1,6 @@
 using AiGateway.Dtos;
 using AiGateway.Services;
+using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 
 namespace AiGateway.Endpoints;
@@ -69,7 +70,7 @@ public static class SpeachesEndpoints
 
         group.MapGet("/models/{modelId}", GetModel)
             .WithSummary("Get local model info (STT & TTS)")
-            .WithDescription("Gets information about a specific locally installed model by forwarding to Speaches /v1/models/{model_id}.")
+            .WithDescription("Gets information about a specific locally installed model by forwarding to Speaches /v1/models/{model_id}. Example modelId: 'whisper-large-v3' or 'piper-en_US-lessac'.")
             .Produces<SpeachesModelResponseDto>(StatusCodes.Status200OK)
             .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
             .Produces<ErrorDto>(StatusCodes.Status401Unauthorized)
@@ -79,7 +80,7 @@ public static class SpeachesEndpoints
 
         group.MapPost("/models/{modelId}", DownloadModel)
             .WithSummary("Download/install model (STT & TTS)")
-            .WithDescription("Downloads and installs a model from registry by forwarding to Speaches /v1/models/{model_id}.")
+            .WithDescription("Downloads and installs a model from registry by forwarding to Speaches /v1/models/{model_id}. Example modelId: 'whisper-large-v3' or 'piper-en_US-lessac'.")
             .Produces<SpeachesModelActionResponseDto>(StatusCodes.Status200OK)
             .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
             .Produces<ErrorDto>(StatusCodes.Status401Unauthorized)
@@ -89,7 +90,7 @@ public static class SpeachesEndpoints
 
         group.MapDelete("/models/{modelId}", DeleteModel)
             .WithSummary("Delete local model (STT & TTS)")
-            .WithDescription("Deletes a locally installed model by forwarding to Speaches /v1/models/{model_id}.")
+            .WithDescription("Deletes a locally installed model by forwarding to Speaches /v1/models/{model_id}. Example modelId: 'whisper-large-v3' or 'piper-en_US-lessac'.")
             .Produces<SpeachesModelActionResponseDto>(StatusCodes.Status200OK)
             .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
             .Produces<ErrorDto>(StatusCodes.Status401Unauthorized)
@@ -119,7 +120,12 @@ public static class SpeachesEndpoints
         // Available models from registry - STT
         group.MapGet("/models/available/stt", ListAvailableSttModels)
             .WithSummary("List available STT models (registry)")
-            .WithDescription("Lists available STT models from Speaches registry. Supports filtering via query params: q (search), language, ownedBy.")
+            .WithDescription(@"Lists available STT models from Speaches registry.
+
+Optional query parameters:
+• q - Search filter (substring match in model ID, case-insensitive)
+• language - Filter by language code (e.g., 'en', 'da', 'de')
+• ownedBy - Filter by model owner/provider")
             .Produces<SpeachesRegistryResponseDto>(StatusCodes.Status200OK)
             .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
             .Produces<ErrorDto>(StatusCodes.Status401Unauthorized)
@@ -129,7 +135,14 @@ public static class SpeachesEndpoints
         // Available models from registry - TTS
         group.MapGet("/models/available/tts", ListAvailableTtsModels)
             .WithSummary("List available TTS models (registry)")
-            .WithDescription("Lists available TTS models from Speaches registry. Supports filtering via query params: q (search), language, voiceLanguage, ownedBy, hasVoices.")
+            .WithDescription(@"Lists available TTS models from Speaches registry.
+
+Optional query parameters:
+• q - Search filter (substring match in model ID, case-insensitive)
+• language - Filter by language (matches model.language OR any voice language)
+• voiceLanguage - Filter by voice language specifically
+• ownedBy - Filter by model owner/provider
+• hasVoices - true=only models with voices, false=only models without voices")
             .Produces<SpeachesRegistryResponseDto>(StatusCodes.Status200OK)
             .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
             .Produces<ErrorDto>(StatusCodes.Status401Unauthorized)
@@ -184,7 +197,7 @@ public static class SpeachesEndpoints
             "models-list");
     }
 
-    private static Task<IResult> GetModel(HttpContext context, string modelId, IHttpClientFactory httpClientFactory)
+    private static Task<IResult> GetModel(HttpContext context, [FromRoute] string modelId, IHttpClientFactory httpClientFactory)
     {
         return UpstreamForwarder.ForwardAsync(
             context,
@@ -195,7 +208,7 @@ public static class SpeachesEndpoints
             "models-get");
     }
 
-    private static Task<IResult> DownloadModel(HttpContext context, string modelId, IHttpClientFactory httpClientFactory)
+    private static Task<IResult> DownloadModel(HttpContext context, [FromRoute] string modelId, IHttpClientFactory httpClientFactory)
     {
         return UpstreamForwarder.ForwardAsync(
             context,
@@ -206,7 +219,7 @@ public static class SpeachesEndpoints
             "models-download");
     }
 
-    private static Task<IResult> DeleteModel(HttpContext context, string modelId, IHttpClientFactory httpClientFactory)
+    private static Task<IResult> DeleteModel(HttpContext context, [FromRoute] string modelId, IHttpClientFactory httpClientFactory)
     {
         return UpstreamForwarder.ForwardAsync(
             context,
