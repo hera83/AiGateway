@@ -68,9 +68,10 @@ public static class SpeachesEndpoints
             .Produces<ErrorDto>(StatusCodes.Status403Forbidden)
             .Produces<ErrorDto>(StatusCodes.Status502BadGateway);
 
-        group.MapGet("/models/{modelId}", GetModel)
+        // Note: Using {*modelId} catch-all because model IDs contain "/" (e.g., "Systran/faster-whisper-medium")
+        group.MapGet("/models/{*modelId}", GetModel)
             .WithSummary("Get local model info (STT & TTS)")
-            .WithDescription("Gets information about a specific locally installed model by forwarding to Speaches /v1/models/{model_id}. Example modelId: 'whisper-large-v3' or 'piper-en_US-lessac'.")
+            .WithDescription("Gets information about a specific locally installed model by forwarding to Speaches /v1/models/{model_id}. Example modelId: 'Systran/faster-whisper-medium' or 'rhasspy/piper-voices'.")
             .Produces<SpeachesModelResponseDto>(StatusCodes.Status200OK)
             .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
             .Produces<ErrorDto>(StatusCodes.Status401Unauthorized)
@@ -78,9 +79,9 @@ public static class SpeachesEndpoints
             .Produces<ErrorDto>(StatusCodes.Status404NotFound)
             .Produces<ErrorDto>(StatusCodes.Status502BadGateway);
 
-        group.MapPost("/models/{modelId}", DownloadModel)
+        group.MapPost("/models/{*modelId}", DownloadModel)
             .WithSummary("Download/install model (STT & TTS)")
-            .WithDescription("Downloads and installs a model from registry by forwarding to Speaches /v1/models/{model_id}. Example modelId: 'whisper-large-v3' or 'piper-en_US-lessac'.")
+            .WithDescription("Downloads and installs a model from registry by forwarding to Speaches /v1/models/{model_id}. Example modelId: 'Systran/faster-whisper-medium' or 'rhasspy/piper-voices'.")
             .Produces<SpeachesModelActionResponseDto>(StatusCodes.Status200OK)
             .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
             .Produces<ErrorDto>(StatusCodes.Status401Unauthorized)
@@ -88,9 +89,9 @@ public static class SpeachesEndpoints
             .Produces<ErrorDto>(StatusCodes.Status404NotFound)
             .Produces<ErrorDto>(StatusCodes.Status502BadGateway);
 
-        group.MapDelete("/models/{modelId}", DeleteModel)
+        group.MapDelete("/models/{*modelId}", DeleteModel)
             .WithSummary("Delete local model (STT & TTS)")
-            .WithDescription("Deletes a locally installed model by forwarding to Speaches /v1/models/{model_id}. Example modelId: 'whisper-large-v3' or 'piper-en_US-lessac'.")
+            .WithDescription("Deletes a locally installed model by forwarding to Speaches /v1/models/{model_id}. Example modelId: 'Systran/faster-whisper-medium' or 'rhasspy/piper-voices'.")
             .Produces<SpeachesModelActionResponseDto>(StatusCodes.Status200OK)
             .Produces<ErrorDto>(StatusCodes.Status400BadRequest)
             .Produces<ErrorDto>(StatusCodes.Status401Unauthorized)
@@ -179,33 +180,36 @@ Optional query parameters:
 
     private static Task<IResult> GetModel(HttpContext context, [FromRoute] string modelId, IHttpClientFactory httpClientFactory)
     {
+        // Forward modelId as-is (raw) to Speaches - model IDs contain "/" (e.g., "Systran/faster-whisper-medium")
         return UpstreamForwarder.ForwardAsync(
             context,
             httpClientFactory,
             "speaches",
-            $"/v1/models/{Uri.EscapeDataString(modelId)}",
+            $"/v1/models/{modelId}",
             "speaches",
             "models-get");
     }
 
     private static Task<IResult> DownloadModel(HttpContext context, [FromRoute] string modelId, IHttpClientFactory httpClientFactory)
     {
+        // Forward modelId as-is (raw) to Speaches - model IDs contain "/" (e.g., "Systran/faster-whisper-medium")
         return UpstreamForwarder.ForwardAsync(
             context,
             httpClientFactory,
             "speaches",
-            $"/v1/models/{Uri.EscapeDataString(modelId)}",
+            $"/v1/models/{modelId}",
             "speaches",
             "models-download");
     }
 
     private static Task<IResult> DeleteModel(HttpContext context, [FromRoute] string modelId, IHttpClientFactory httpClientFactory)
     {
+        // Forward modelId as-is (raw) to Speaches - model IDs contain "/" (e.g., "Systran/faster-whisper-medium")
         return UpstreamForwarder.ForwardAsync(
             context,
             httpClientFactory,
             "speaches",
-            $"/v1/models/{Uri.EscapeDataString(modelId)}",
+            $"/v1/models/{modelId}",
             "speaches",
             "models-delete");
     }
