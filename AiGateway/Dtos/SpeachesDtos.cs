@@ -113,3 +113,8 @@ public sealed class SpeachesModelActionResponseDto
 {
     public JsonElement? Body { get; set; }
 }
+
+public sealed class SpeachesRegistryResponseDto
+{
+    public JsonElement? Body { get; set; }
+}
